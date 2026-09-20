@@ -33,8 +33,10 @@ npm run db:push
 
 ## API
 
-- `POST /api/auth/register` rejestruje skarbnika
-- `POST /api/classes` tworzy klasę z wychowawcą i radą rodziców
+- `POST /api/auth/register` rejestruje użytkownika
+- `POST /api/classes` tworzy klasę z wychowawcą oraz użytkownikami przewodniczącego i zastępcy
+- `POST /api/classes/:classId/members` przypisuje użytkownika do klasy z rolą `SKARBNIK`, `RODZIC`, `NAUCZYCIEL`, `PRZEWODNICZACY` lub `ZASTEPCA`
 - `POST /api/classes/:classId/students` dodaje ucznia
 - `POST /api/classes/:classId/collections` tworzy zbiórkę i przypisuje uczniów
+- `POST /api/collections/:collectionId/contributions` zapisuje wpłatę wraz z opcjonalnym `bankId`
 - `GET /api/classes/:classId/summary` zwraca klasę wraz z podsumowaniem zbiórek

@@ -7,33 +7,77 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ClassRole {
+  SKARBNIK
+  RODZIC
+  NAUCZYCIEL
+  PRZEWODNICZACY
+  ZASTEPCA
+}
+
+enum SystemRole {
+  USER
+  ADMIN
+}
+
 model User {
   id           String    @id @default(cuid())
+  login        String    @unique
   email        String    @unique
   passwordHash String
   name         String
+  surname      String
+  role         SystemRole @default(USER)
   createdAt    DateTime  @default(now())
-  classes      Class[]
+  ownedClasses Class[]   @relation("ClassOwner")
+  taughtClasses Class[]  @relation("ClassTeacher")
+  chairedClasses Class[] @relation("ClassChairperson")
+  deputyClasses  Class[] @relation("ClassDeputy")
+  classMemberships ClassMembership[]
 }
 
 model Class {
-  id          String       @id @default(cuid())
-  name        String
-  description String?
-  teacher     String
-  council     Json
-  ownerId     String
-  owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  students    Student[]
-  collections Collection[]
-  createdAt   DateTime     @default(now())
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  teacher        String
+  teacherId      String?
+  chairpersonName String?
+  deputyName     String?
+  ownerId        String
+  chairpersonId  String?
+  deputyId       String?
+  owner          User         @relation("ClassOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  teacherUser    User?        @relation("ClassTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  chairperson    User?        @relation("ClassChairperson", fields: [chairpersonId], references: [id], onDelete: SetNull)
+  deputy         User?        @relation("ClassDeputy", fields: [deputyId], references: [id], onDelete: SetNull)
+  members        ClassMembership[]
+  students       Student[]
+  collections    Collection[]
+  createdAt      DateTime     @default(now())
+}
+
+model ClassMembership {
+  classId  String
+  userId   String
+  role     ClassRole
+  class    Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user     User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([classId, userId])
+  @@index([userId])
 }
 
 model Student {
   id           String              @id @default(cuid())
   firstName    String
   lastName     String
-  parentPhone  String
+  parent1      String?
+  parent2      String?
+  parent1Phone String?
+  parent2Phone String?
+  parent1Mail  String?
+  parent2Mail  String?
   active       Boolean             @default(true)
   classId      String
   class        Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
@@ -57,6 +101,7 @@ model Collection {
 
 model Contribution {
   id           String      @id @default(cuid())
+  bankId       String?     @unique
   amount       Decimal     @db.Decimal(10, 2)
   paidAt       DateTime    @default(now())
   studentId    String

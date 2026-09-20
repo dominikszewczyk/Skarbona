@@ -6,6 +6,6 @@
     "dev": "npm run dev --workspace @skarbona/web",
     "dev:api": "npm run dev --workspace @skarbona/api",
     "build": "npm run build --workspace @skarbona/web",
-    "db:push": "npm run db:push --workspace @skarbona/api"
+    "db:push": "node scripts/db-push.cjs"
   }
 }
