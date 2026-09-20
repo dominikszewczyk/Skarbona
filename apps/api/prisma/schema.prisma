@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime  @default(now())
+  classes      Class[]
+}
+
+model Class {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  teacher     String
+  council     Json
+  ownerId     String
+  owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  students    Student[]
+  collections Collection[]
+  createdAt   DateTime     @default(now())
+}
+
+model Student {
+  id           String              @id @default(cuid())
+  firstName    String
+  lastName     String
+  parentPhone  String
+  active       Boolean             @default(true)
+  classId      String
+  class        Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
+  contributions Contribution[]
+  collections  Collection[]
+}
+
+model Collection {
+  id          String         @id @default(cuid())
+  name        String
+  schoolYear  String
+  startsAt    DateTime
+  endsAt      DateTime
+  target      Decimal        @db.Decimal(10, 2)
+  spent       Decimal        @default(0) @db.Decimal(10, 2)
+  classId     String
+  class       Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  students    Student[]
+  contributions Contribution[]
+}
+
+model Contribution {
+  id           String      @id @default(cuid())
+  amount       Decimal     @db.Decimal(10, 2)
+  paidAt       DateTime    @default(now())
+  studentId    String
+  collectionId String
+  student      Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  collection   Collection  @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-skarbona}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skarbona}
+      POSTGRES_DB: ${POSTGRES_DB:-skarbona}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-skarbona}:${POSTGRES_PASSWORD:-skarbona}@db:5432/${POSTGRES_DB:-skarbona}
+      API_PORT: 3000
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  postgres_data:
