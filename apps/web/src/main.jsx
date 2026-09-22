@@ -22,9 +22,13 @@ const mapStudent = (student) => ({
   parent: student.parent1 || student.parent2 || 'Brak danych'
 });
 const mapCollection = (collection, classStudents = []) => {
-  const collected = collection.contributions.reduce((total, contribution) => total + Number(contribution.amount), 0);
+  const transactions = collection.transactions || [];
+  const transactionIncome = transactions.filter((transaction) => transaction.type === 'PRZYCHOD');
+  const transactionExpenses = transactions.filter((transaction) => transaction.type === 'WYDATEK');
+  const collected = collection.contributions.reduce((total, contribution) => total + Number(contribution.amount), 0) + transactionIncome.reduce((total, transaction) => total + Number(transaction.amount), 0);
   const paidByStudent = new Map();
   collection.contributions.forEach((contribution) => paidByStudent.set(contribution.studentId, (paidByStudent.get(contribution.studentId) || 0) + Number(contribution.amount)));
+  transactionIncome.forEach((transaction) => { if (transaction.studentId) paidByStudent.set(transaction.studentId, (paidByStudent.get(transaction.studentId) || 0) + Number(transaction.amount)); });
   const studentStatuses = collection.students.map((student) => ({
     id: student.id,
     name: `${student.firstName} ${student.lastName}`,
@@ -39,12 +43,17 @@ const mapCollection = (collection, classStudents = []) => {
     collected,
     target,
     targetTotal: target * collection.students.length,
-    spent: Number(collection.spent),
+    spent: Number(collection.spent) + transactionExpenses.reduce((total, transaction) => total + Number(transaction.amount), 0),
     students: collection.students.length,
     classStudents: classStudents.length || collection.classStudents || 0,
     paid: studentStatuses.filter((student) => student.paid > 0).length,
     unpaid: studentStatuses.filter((student) => !student.paid).map((student) => student.name),
-    studentStatuses
+    studentStatuses,
+    transactions: transactions.map((transaction) => ({
+      ...transaction,
+      amount: Number(transaction.amount),
+      transactionDate: new Date(transaction.transactionDate)
+    }))
   };
 };
 
@@ -86,6 +95,13 @@ function App() {
     setSelectedRouteStudent(new URL(path, window.location.origin).searchParams.get('student'));
     setMobileOpen(false);
   };
+  const reloadClassData = () => fetch(`${API_URL}/api/users/by-login/dominik/classes`).then((response) => response.json()).then((classes) => {
+    if (!classes.length) return;
+    const currentClass = classes[0];
+    setClassData(currentClass);
+    setStudentRows(currentClass.students.map(mapStudent));
+    setCollectionRows(currentClass.collections.map((collection) => mapCollection(collection, currentClass.students)));
+  }).catch(() => {});
 
   const submit = async (event) => {
     event.preventDefault();
@@ -524,6 +540,7 @@ function App() {
                   }))}
                   onAdd={openNewCollection}
                   onStudentNavigate={(studentId) => navigate(`/students?student=${encodeURIComponent(studentId)}`)}
+                  onTransactionNavigate={(collectionId) => navigate(`/transactions?collection=${encodeURIComponent(collectionId)}`)}
                   onEdit={(collection) => {
                     const assignedStudentIds = Array.isArray(collection.students) ? collection.students.map((student) => student.id) : (collection.studentStatuses || []).map((student) => student.id);
                     setSelectedCollection(collection);
@@ -534,7 +551,7 @@ function App() {
                   }}
                 />
               ) : activeNav === 'Transakcje' ? (
-                <TransactionsPage apiUrl={API_URL} classId={classId} students={studentRows} collections={collectionRows} />
+                <TransactionsPage apiUrl={API_URL} classId={classId} students={studentRows} collections={collectionRows} onImported={reloadClassData} />
               ) : (
                 <>
                   <section className='page-heading'>
@@ -578,7 +595,7 @@ function App() {
                         <span />
                       </div>
                       {activeCollectionRows.map((item) => (
-                        <CollectionRow key={`${item.name}-${item.schoolYear}-${item.id}`} item={item} expanded={expanded === item.id} onExpand={() => setExpanded(expanded === item.id ? null : item.id)} />
+                        <CollectionRow key={`${item.name}-${item.schoolYear}-${item.id}`} item={item} expanded={expanded === item.id} onExpand={() => setExpanded(expanded === item.id ? null : item.id)} onTransactionNavigate={(collectionId) => navigate(`/transactions?collection=${encodeURIComponent(collectionId)}`)} />
                       ))}
                     </div>
                     <aside className='side-column'>

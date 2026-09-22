@@ -36,7 +36,7 @@ app.get('/api/users/by-login/:login/classes', async (req, res) => {
   if (!user) return res.status(404).json({ error: 'Nie znaleziono użytkownika.' });
   const classes = await prisma.class.findMany({
     where: { ownerId: user.id },
-    include: { teacherUser: true, chairperson: true, deputy: true, students: true, collections: { include: { contributions: true, students: true }, orderBy: { startsAt: 'desc' } } },
+    include: { teacherUser: true, chairperson: true, deputy: true, students: true, collections: { include: { contributions: true, students: true, transactions: { orderBy: { transactionDate: 'desc' } } }, orderBy: { startsAt: 'desc' } } },
     orderBy: { createdAt: 'asc' },
   });
   res.json(classes);
@@ -45,7 +45,7 @@ app.get('/api/users/by-login/:login/classes', async (req, res) => {
 app.get('/api/classes/:classId/summary', async (req, res) => {
   const classData = await prisma.class.findUnique({
     where: { id: req.params.classId },
-    include: { teacherUser: true, chairperson: true, deputy: true, members: { include: { user: true } }, students: true, collections: { include: { contributions: true, students: true }, orderBy: { startsAt: 'desc' } } }
+    include: { teacherUser: true, chairperson: true, deputy: true, members: { include: { user: true } }, students: true, collections: { include: { contributions: true, students: true, transactions: { orderBy: { transactionDate: 'desc' } } }, orderBy: { startsAt: 'desc' } } }
   });
   if (!classData) return res.status(404).json({ error: 'Nie znaleziono klasy.' });
   res.json(classData);
