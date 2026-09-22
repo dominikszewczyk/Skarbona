@@ -121,17 +121,19 @@ app.post('/api/classes/:classId/collections', async (req, res) => {
   const { name, startsAt, endsAt, target, studentIds = [] } = req.body;
   const classData = await prisma.class.findUnique({ where: { id: req.params.classId }, select: { schoolYear: true } });
   if (!classData) return res.status(404).json({ error: 'Nie znaleziono klasy.' });
-  if (!name || !startsAt || !endsAt || !target) return res.status(400).json({ error: 'Nazwa, daty i kwota są wymagane.' });
-  const collection = await prisma.collection.create({ data: { name, schoolYear: classData.schoolYear, startsAt: new Date(startsAt), endsAt: new Date(endsAt), target, classId: req.params.classId, students: { connect: studentIds.map((id) => ({ id })) } } });
+  if (!name || !startsAt || !target) return res.status(400).json({ error: 'Nazwa, data rozpoczęcia i kwota są wymagane.' });
+  const collectionData = { name, schoolYear: classData.schoolYear, startsAt: new Date(startsAt), endsAt: endsAt ? new Date(endsAt) : null, target, classId: req.params.classId, students: { connect: studentIds.map((id) => ({ id })) } };
+  const collection = await prisma.collection.create({ data: collectionData });
   res.status(201).json(await prisma.collection.findUnique({ where: { id: collection.id }, include: { contributions: true, students: true } }));
 });
 
 app.put('/api/classes/:classId/collections/:collectionId', async (req, res) => {
   const { name, startsAt, endsAt, target, studentIds } = req.body;
-  if (!name || !startsAt || !endsAt || !target) return res.status(400).json({ error: 'Nazwa, daty i kwota są wymagane.' });
+  if (!name || !startsAt || !target) return res.status(400).json({ error: 'Nazwa, data rozpoczęcia i kwota są wymagane.' });
   const existing = await prisma.collection.findFirst({ where: { id: req.params.collectionId, classId: req.params.classId } });
   if (!existing) return res.status(404).json({ error: 'Nie znaleziono zbiórki.' });
-  const collection = await prisma.collection.update({ where: { id: existing.id }, data: { name, startsAt: new Date(startsAt), endsAt: new Date(endsAt), target, ...(Array.isArray(studentIds) ? { students: { set: studentIds.map((id) => ({ id })) } } : {}) } });
+  const collectionData = { name, startsAt: new Date(startsAt), endsAt: endsAt ? new Date(endsAt) : null, target, ...(Array.isArray(studentIds) ? { students: { set: studentIds.map((id) => ({ id })) } } : {}) };
+  const collection = await prisma.collection.update({ where: { id: existing.id }, data: collectionData });
   res.json(await prisma.collection.findUnique({ where: { id: collection.id }, include: { contributions: true, students: true } }));
 });
 

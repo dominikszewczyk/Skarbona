@@ -35,7 +35,7 @@ const mapCollection = (collection, classStudents = []) => {
   return {
     ...collection,
     type: collection.schoolYear || 'Zbiórka',
-    dates: `${new Date(collection.startsAt).toLocaleDateString('pl-PL')} – ${new Date(collection.endsAt).toLocaleDateString('pl-PL')}`,
+    dates: `${new Date(collection.startsAt).toLocaleDateString('pl-PL')}${collection.endsAt ? ` – ${new Date(collection.endsAt).toLocaleDateString('pl-PL')}` : ''}`,
     collected,
     target,
     targetTotal: target * collection.students.length,
@@ -51,7 +51,7 @@ const mapCollection = (collection, classStudents = []) => {
 function App() {
   const [activeNav, setActiveNav] = useState(() => routeToNav(window.location.pathname));
   const [selectedRouteStudent, setSelectedRouteStudent] = useState(() => new URLSearchParams(window.location.search).get('student'));
-  const [expanded, setExpanded] = useState(0);
+  const [expanded, setExpanded] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
@@ -78,7 +78,8 @@ function App() {
   const totalSpent = collectionRows.reduce((sum, item) => sum + item.spent, 0);
   const totalTarget = collectionRows.reduce((sum, item) => sum + item.targetTotal, 0);
   const collectionProgress = totalTarget ? Math.round((totalCollected / totalTarget) * 100) : 0;
-  const activeCollections = collectionRows.filter((item) => new Date(item.endsAt) >= new Date()).length;
+  const activeCollections = collectionRows.filter((item) => !item.endsAt || new Date(item.endsAt) >= new Date()).length;
+  const activeCollectionRows = collectionRows.filter((item) => !item.endsAt || new Date(item.endsAt) >= new Date());
   const navigate = (path) => {
     window.history.pushState({}, '', path);
     setActiveNav(routeToNav(path));
@@ -171,7 +172,7 @@ function App() {
           target: form.querySelector('[name="target"]')?.value || inputs[3]?.value,
           studentIds: selectedStudentIds
         };
-        if (!collectionData.name || !collectionData.startsAt || !collectionData.endsAt || !collectionData.target) throw new Error('Uzupełnij nazwę, daty i kwotę zbiórki.');
+        if (!collectionData.name || !collectionData.startsAt || !collectionData.target) throw new Error('Uzupełnij nazwę, datę rozpoczęcia i kwotę zbiórki.');
         const response = await fetch(isEdit ? `${API_URL}/api/classes/${classId}/collections/${selectedCollection.id}` : `${API_URL}/api/classes/${classId}/collections`, {
           method: isEdit ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -242,7 +243,7 @@ function App() {
         setInputName(2, 'endsAt');
         setInputName(3, 'target');
         if (selectedCollection) {
-          const values = [selectedCollection.name, selectedCollection.startsAt.slice(0, 10), selectedCollection.endsAt.slice(0, 10), selectedCollection.target];
+          const values = [selectedCollection.name, selectedCollection.startsAt.slice(0, 10), selectedCollection.endsAt?.slice(0, 10) || '', selectedCollection.target];
           values.forEach((value, index) => {
             if (inputs[index]) inputs[index].value = value || '';
           });
@@ -576,8 +577,8 @@ function App() {
                         <span>Uczniowie</span>
                         <span />
                       </div>
-                      {collectionRows.map((item, index) => (
-                        <CollectionRow key={`${item.name}-${item.schoolYear}-${item.id}`} item={item} expanded={expanded === index} onExpand={() => setExpanded(expanded === index ? -1 : index)} />
+                      {activeCollectionRows.map((item) => (
+                        <CollectionRow key={`${item.name}-${item.schoolYear}-${item.id}`} item={item} expanded={expanded === item.id} onExpand={() => setExpanded(expanded === item.id ? null : item.id)} />
                       ))}
                     </div>
                     <aside className='side-column'>
@@ -690,7 +691,7 @@ function App() {
                   </label>
                   <label>
                     Data do
-                    <input required type='date' />
+                    <input type='date' />
                   </label>
                 </div>
                 <label>

@@ -105,7 +105,7 @@ model Collection {
   name        String
   schoolYear  String
   startsAt    DateTime
-  endsAt      DateTime
+  endsAt      DateTime?
   target      Decimal        @db.Decimal(10, 2)
   spent       Decimal        @default(0) @db.Decimal(10, 2)
   classId     String
