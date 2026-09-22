@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowDownToLine, Bell, ChevronDown, ChevronRight, CircleHelp, ClipboardList, LayoutDashboard, LogOut, Menu, Pencil, Plus, Power, Search, Settings, Sparkles, Users, WalletCards, X } from 'lucide-react';
+import { ArrowDownToLine, Bell, ChevronRight, CircleHelp, Menu, Pencil, Plus, Power, Search, Settings, Sparkles, Users, WalletCards, X } from 'lucide-react';
 import './styles.css';
 import CollectionRow from './components/CollectionRow';
 import CollectionsPage from './components/CollectionsPage';
@@ -8,6 +8,7 @@ import CollectionStudentPicker from './components/CollectionStudentPicker';
 import RoleField from './components/RoleField';
 import StudentsPage from './components/StudentsPage';
 import SummaryCard from './components/SummaryCard';
+import Sidebar from './components/Sidebar';
 import TransactionsPage from './components/TransactionsPage';
 
 const initialStudents = [];
@@ -424,51 +425,7 @@ function App() {
 
   return (
     <div className='app-shell'>
-      <aside className={`sidebar ${mobileOpen ? 'open' : ''} ${!hasClass ? 'no-class' : ''}`}>
-        <div className='brand'>
-          <div className='brand-mark'>
-            <Sparkles size={19} />
-          </div>
-          <span>Skarbona</span>
-          {mobileOpen && (
-            <button className='icon-button close-menu' onClick={() => setMobileOpen(false)}>
-              <X size={18} />
-            </button>
-          )}
-        </div>
-        <div className='workspace-label'>TWOJA PRZESTRZEŃ</div>
-        <button className='class-switcher'>
-          <span className='class-avatar'>{classData.name?.slice(0, 2) || '—'}</span>
-          <span>
-            <strong>{classData.name || 'Brak klasy'}</strong>
-            <small>{classData.description || 'Wybierz lub utwórz klasę'}</small>
-          </span>
-          <ChevronDown size={16} />
-        </button>
-        <nav>
-          {['Przegląd', 'Zbiórki', 'Uczniowie', 'Transakcje'].map((item, index) => (
-            <button key={item} className={activeNav === item ? 'nav-item active' : 'nav-item'} onClick={() => navigate(index === 0 ? '/' : index === 1 ? '/collections' : index === 2 ? '/students' : '/transactions')}>
-              <span>{[<LayoutDashboard size={18} />, <WalletCards size={18} />, <Users size={18} />, <ClipboardList size={18} />][index]}</span>
-              {item}
-              {item === 'Zbiórki' && <em>{collectionRows.length}</em>}
-            </button>
-          ))}
-        </nav>
-        <div className='sidebar-bottom'>
-          <button className='nav-item'>
-            <Settings size={18} />
-            Ustawienia
-          </button>
-          <div className='user-card'>
-            <div className='user-avatar'>DS</div>
-            <span>
-              <strong>Dominik Szewczyk</strong>
-              <small>Administrator</small>
-            </span>
-            <LogOut size={16} />
-          </div>
-        </div>
-      </aside>
+      <Sidebar activeNav={activeNav} classData={classData} collectionCount={collectionRows.length} hasClass={hasClass} mobileOpen={mobileOpen} onNavigate={navigate} onClose={() => setMobileOpen(false)} />
       <main className='main-content'>
         <header className='topbar'>
           <button className='mobile-menu icon-button' onClick={() => setMobileOpen(true)}>
