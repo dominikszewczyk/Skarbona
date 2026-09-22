@@ -68,9 +68,9 @@ app.post('/api/classes/:classId/transactions/import', async (req, res) => {
   const existingReferences = new Set(existing.map((transaction) => transaction.referenceNumber));
   const seenReferences = new Set(existingReferences);
   const fresh = transactions.filter((transaction) => { const reference = String(transaction.referenceNumber || '').trim(); if (!reference || seenReferences.has(reference)) return false; seenReferences.add(reference); return true; });
-  const invalid = fresh.filter((transaction) => !transaction.transactionDate || !transaction.title || !transaction.amount || !['PRZYCHOD', 'WYDATEK'].includes(transaction.type));
-  if (invalid.length) return res.status(400).json({ error: 'Każda transakcja musi mieć numer referencyjny, datę, tytuł, kwotę i typ.' });
-  const created = await prisma.$transaction(fresh.map((transaction) => prisma.transaction.create({ data: { referenceNumber: transaction.referenceNumber, bank, transactionDate: new Date(transaction.transactionDate), title: transaction.title, amount: transaction.amount, type: transaction.type, classId: req.params.classId, collectionId: transaction.collectionId || null, studentId: transaction.studentId || null } })));
+  const invalid = fresh.filter((transaction) => !transaction.transactionDate || !transaction.counterparty || !transaction.title || !transaction.amount || !['PRZYCHOD', 'WYDATEK'].includes(transaction.type));
+  if (invalid.length) return res.status(400).json({ error: 'Każda transakcja musi mieć numer referencyjny, datę, nadawcę/odbiorcę, tytuł, kwotę i typ.' });
+  const created = await prisma.$transaction(fresh.map((transaction) => prisma.transaction.create({ data: { referenceNumber: transaction.referenceNumber, bank, transactionDate: new Date(transaction.transactionDate), counterparty: transaction.counterparty || null, title: transaction.title, amount: transaction.amount, type: transaction.type, classId: req.params.classId, collectionId: transaction.collectionId || null, studentId: transaction.studentId || null } })));
   res.status(201).json({ created, skipped: transactions.length - fresh.length });
 });
 

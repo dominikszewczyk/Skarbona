@@ -120,6 +120,7 @@ model Transaction {
   referenceNumber String          @unique
   bank            String
   transactionDate DateTime
+  counterparty    String?
   title           String
   amount          Decimal         @db.Decimal(10, 2)
   type            TransactionType
