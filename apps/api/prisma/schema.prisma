@@ -20,6 +20,17 @@ enum SystemRole {
   ADMIN
 }
 
+enum Gender {
+  KOBIETA
+  MEZCZYZNA
+  NIE_PODANO
+}
+
+enum TransactionType {
+  PRZYCHOD
+  WYDATEK
+}
+
 model User {
   id           String    @id @default(cuid())
   login        String    @unique
@@ -39,6 +50,7 @@ model User {
 model Class {
   id             String       @id @default(cuid())
   name           String
+  schoolYear     String       @default("2025/2026")
   description    String?
   teacher        String
   teacherId      String?
@@ -54,6 +66,7 @@ model Class {
   members        ClassMembership[]
   students       Student[]
   collections    Collection[]
+  transactions   Transaction[]
   createdAt      DateTime     @default(now())
 }
 
@@ -78,11 +91,13 @@ model Student {
   parent2Phone String?
   parent1Mail  String?
   parent2Mail  String?
+  gender       Gender              @default(NIE_PODANO)
   active       Boolean             @default(true)
   classId      String
   class        Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
   contributions Contribution[]
   collections  Collection[]
+  transactions Transaction[]
 }
 
 model Collection {
@@ -97,6 +112,26 @@ model Collection {
   class       Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
   students    Student[]
   contributions Contribution[]
+  transactions Transaction[]
+}
+
+model Transaction {
+  id              String          @id @default(cuid())
+  referenceNumber String          @unique
+  bank            String
+  transactionDate DateTime
+  title           String
+  amount          Decimal         @db.Decimal(10, 2)
+  type            TransactionType
+  classId         String
+  collectionId    String?
+  studentId       String?
+  class           Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
+  collection      Collection?     @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  student         Student?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  createdAt       DateTime        @default(now())
+
+  @@index([classId, transactionDate])
 }
 
 model Contribution {
