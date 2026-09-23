@@ -10,28 +10,18 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  api:
-    image: ${API_IMAGE:-ghcr.io/${GHCR_NAMESPACE:-local}/skarbona-api:${IMAGE_TAG:-latest}}
+  app:
+    image: ${APP_IMAGE:-ghcr.io/${GHCR_NAMESPACE:-local}/skarbona:${IMAGE_TAG:-latest}}
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/}
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-skarbona}:${POSTGRES_PASSWORD:-skarbona}@db:5432/${POSTGRES_DB:-skarbona}
       API_PORT: 3000
     depends_on:
       - db
-    ports:
-      - "3000:3000"
-
-  web:
-    image: ${WEB_IMAGE:-ghcr.io/${GHCR_NAMESPACE:-local}/skarbona-web:${IMAGE_TAG:-latest}}
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
-    depends_on:
-      - api
     ports:
       - "8080:80"
 

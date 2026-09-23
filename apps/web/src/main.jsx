@@ -15,7 +15,7 @@ const initialStudents = [];
 const routeToNav = (pathname) => (pathname.startsWith('/collections') ? 'Zbiórki' : pathname.startsWith('/students') ? 'Uczniowie' : pathname.startsWith('/transactions') ? 'Transakcje' : 'Przegląd');
 const money = (value) => `${value.toLocaleString('pl-PL')} zł`;
 const configuredApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-const API_URL = /^https?:\/\//.test(configuredApiUrl) ? configuredApiUrl.replace(/\/+$/, '') : 'http://localhost:3000';
+const API_URL = configuredApiUrl === '/' ? '' : /^https?:\/\//.test(configuredApiUrl) ? configuredApiUrl.replace(/\/+$/, '') : 'http://localhost:3000';
 const mapStudent = (student) => ({
   ...student,
   name: `${student.firstName} ${student.lastName}`,

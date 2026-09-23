@@ -35,15 +35,13 @@ npm run db:push
 
 Workflow `.github/workflows/docker-publish.yml` buduje i publikuje obrazy do GitHub Container Registry po pushu do `master`:
 
-- `ghcr.io/<github-user>/skarbona-api:latest`
-- `ghcr.io/<github-user>/skarbona-web:latest`
+- `ghcr.io/<github-user>/skarbona:latest`
 
-W ustawieniach repozytorium dodaj zmienną Actions `VITE_API_URL` z publicznym adresem API, np. `https://api.example.com`. Na serwerze ustaw w `.env`:
+Na serwerze ustaw w `.env`:
 
 ```dotenv
 GHCR_NAMESPACE=github-user
 IMAGE_TAG=latest
-VITE_API_URL=https://api.example.com
 ```
 
 Następnie uruchom:
@@ -52,9 +50,11 @@ Następnie uruchom:
 docker login ghcr.io
 docker compose pull
 docker compose up -d db
-docker compose run --rm api npx prisma db push
-docker compose up -d api web
+docker compose run --rm app npx prisma db push --schema apps/api/prisma/schema.prisma
+docker compose up -d app
 ```
+
+Aplikacja będzie dostępna pod `http://<adres-serwera>:8080`. Jeden kontener zawiera frontend oraz API, a `db` pozostaje osobnym kontenerem z trwałym wolumenem.
 
 Jeśli obrazy są prywatne, `docker login ghcr.io` musi używać tokenu GitHub z uprawnieniem `read:packages`.
 
