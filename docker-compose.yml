@@ -18,7 +18,7 @@ services:
       args:
         VITE_API_URL: ${VITE_API_URL:-/}
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-skarbona}:${DB_PASSWORD:-skarbona}@${DB_HOST:-db}:5432/${DB_NAME:-skarbona}?schema=${DB_SCHEMA:-skarbon}
+      DATABASE_URL: postgresql://${DB_USER:-skarbona}:${DB_PASSWORD:-skarbona}@${DB_HOST:-db}:5432/${DB_NAME:-skarbona}?schema=${DB_SCHEMA:-skarbona}
       API_PORT: 3000
     depends_on:
       - db
