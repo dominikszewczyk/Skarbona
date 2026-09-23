@@ -11,6 +11,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   api:
+    image: ${API_IMAGE:-ghcr.io/${GHCR_NAMESPACE:-local}/skarbona-api:${IMAGE_TAG:-latest}}
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -23,9 +24,12 @@ services:
       - "3000:3000"
 
   web:
+    image: ${WEB_IMAGE:-ghcr.io/${GHCR_NAMESPACE:-local}/skarbona-web:${IMAGE_TAG:-latest}}
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
     depends_on:
       - api
     ports:

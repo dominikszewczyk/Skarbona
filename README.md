@@ -31,6 +31,33 @@ Aplikacja webowa będzie pod `http://localhost:8080`. Po uruchomieniu bazy wykon
 npm run db:push
 ```
 
+## Obrazy Docker na serwerze
+
+Workflow `.github/workflows/docker-publish.yml` buduje i publikuje obrazy do GitHub Container Registry po pushu do `master`:
+
+- `ghcr.io/<github-user>/skarbona-api:latest`
+- `ghcr.io/<github-user>/skarbona-web:latest`
+
+W ustawieniach repozytorium dodaj zmienną Actions `VITE_API_URL` z publicznym adresem API, np. `https://api.example.com`. Na serwerze ustaw w `.env`:
+
+```dotenv
+GHCR_NAMESPACE=github-user
+IMAGE_TAG=latest
+VITE_API_URL=https://api.example.com
+```
+
+Następnie uruchom:
+
+```bash
+docker login ghcr.io
+docker compose pull
+docker compose up -d db
+docker compose run --rm api npx prisma db push
+docker compose up -d api web
+```
+
+Jeśli obrazy są prywatne, `docker login ghcr.io` musi używać tokenu GitHub z uprawnieniem `read:packages`.
+
 ## API
 
 - `POST /api/auth/register` rejestruje użytkownika
