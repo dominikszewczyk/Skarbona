@@ -8,6 +8,8 @@ import { PrismaClient } from '@prisma/client';
 
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../.env') });
 
+process.env.DATABASE_URL ||= `postgresql://${process.env.DB_USER || 'skarbona'}:${process.env.DB_PASSWORD || 'skarbona'}@${process.env.DB_HOST || 'localhost'}:5432/${process.env.DB_NAME || 'skarbona'}?schema=${process.env.DB_SCHEMA || 'skarbona'}`;
+
 const app = express();
 const prisma = new PrismaClient();
 const port = process.env.API_PORT || 3000;

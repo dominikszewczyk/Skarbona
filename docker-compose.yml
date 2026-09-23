@@ -2,9 +2,9 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-skarbona}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skarbona}
-      POSTGRES_DB: ${POSTGRES_DB:-skarbona}
+      POSTGRES_USER: ${DB_USER:-skarbona}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-skarbona}
+      POSTGRES_DB: ${DB_NAME:-skarbona}
     ports:
       - "5432:5432"
     volumes:
@@ -18,7 +18,7 @@ services:
       args:
         VITE_API_URL: ${VITE_API_URL:-/}
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-skarbona}:${POSTGRES_PASSWORD:-skarbona}@db:5432/${POSTGRES_DB:-skarbona}?schema=skarbon}
+      DATABASE_URL: postgresql://${DB_USER:-skarbona}:${DB_PASSWORD:-skarbona}@${DB_HOST:-db}:5432/${DB_NAME:-skarbona}?schema=${DB_SCHEMA:-skarbon}
       API_PORT: 3000
     depends_on:
       - db

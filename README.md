@@ -42,13 +42,14 @@ Na serwerze ustaw w `.env`:
 ```dotenv
 GHCR_NAMESPACE=github-user
 IMAGE_TAG=latest
-POSTGRES_USER=skarbona
-POSTGRES_PASSWORD=strong-server-password
-POSTGRES_DB=skarbona
-DATABASE_URL=postgresql://skarbona:strong-server-password@db:5432/skarbona?schema=skarbon
+DB_USER=skarbona
+DB_PASSWORD=strong-server-password
+DB_HOST=db
+DB_NAME=skarbona
+DB_SCHEMA=skarbona
 ```
 
-`docker-compose.yml` przekazuje `POSTGRES_USER`, `POSTGRES_PASSWORD` i `POSTGRES_DB` do kontenera PostgreSQL oraz przekazuje istniejącą `DATABASE_URL` do aplikacji. Jeśli `DATABASE_URL` nie jest ustawiona, compose zbuduje ją automatycznie. W konfiguracji Docker hostem bazy musi być `db`, a nie `localhost`. Plik `.env` na serwerze pozostaje lokalny i nie powinien być commitowany.
+`docker-compose.yml` przekazuje te zmienne do PostgreSQL i buduje z nich `DATABASE_URL` dla aplikacji. Prisma nadal korzysta wyłącznie z `DATABASE_URL`, ale nie trzeba jej ręcznie wpisywać. Dla Dockera `DB_HOST` musi być `db`, a lokalnie `localhost`. Plik `.env` na serwerze pozostaje lokalny i nie powinien być commitowany.
 
 Następnie uruchom:
 
