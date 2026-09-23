@@ -1,0 +1,14 @@
+services:
+  app:
+    image: ghcr.io/dominikszewczyk/skarbona:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME}
+      DB_SCHEMA: ${DB_SCHEMA:-skarbona}
+      API_PORT: 3000
+    ports:
+      - "8080:80"

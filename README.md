@@ -37,6 +37,8 @@ Workflow `.github/workflows/docker-publish.yml` buduje i publikuje obrazy do Git
 
 - `ghcr.io/<github-user>/skarbona:latest`
 
+Pakiet znajdziesz w GitHub Packages: https://github.com/dominikszewczyk/Skarbona/pkgs/container/skarbona
+
 Na serwerze ustaw w `.env`:
 
 ```dotenv
@@ -44,25 +46,27 @@ GHCR_NAMESPACE=github-user
 IMAGE_TAG=latest
 DB_USER=skarbona
 DB_PASSWORD=strong-server-password
-DB_HOST=db
+DB_HOST=192.168.0.33
 DB_PORT=5432
 DB_NAME=skarbona
 DB_SCHEMA=skarbona
 ```
 
-`docker-compose.yml` przekazuje te zmienne do PostgreSQL i buduje z nich `DATABASE_URL` dla aplikacji. Prisma nadal korzysta wyłącznie z `DATABASE_URL`, ale nie trzeba jej ręcznie wpisywać. Dla Dockera `DB_HOST` musi być `db`, a lokalnie `localhost`. Plik `.env` na serwerze pozostaje lokalny i nie powinien być commitowany.
+`docker-compose.yml` przekazuje te zmienne do PostgreSQL i buduje z nich `DATABASE_URL` dla aplikacji. Prisma nadal korzysta wyłącznie z `DATABASE_URL`, ale nie trzeba jej ręcznie wpisywać. Dla istniejącej bazy użyj `docker-compose.server.yml` i ustaw `DB_HOST` na jej adres, np. `192.168.0.33`. Plik `.env` na serwerze pozostaje lokalny i nie powinien być commitowany.
 
 Następnie uruchom:
 
 ```bash
 docker login ghcr.io
-docker compose pull
-docker compose up -d db
-docker compose run --rm app npx prisma db push --schema apps/api/prisma/schema.prisma
-docker compose up -d app
+docker compose -f docker-compose.server.yml pull
+docker compose -f docker-compose.server.yml up -d
 ```
 
-Aplikacja będzie dostępna pod `http://<adres-serwera>:8080`. Jeden kontener zawiera frontend oraz API, a `db` pozostaje osobnym kontenerem z trwałym wolumenem.
+Aplikacja będzie dostępna pod `http://<adres-serwera>:8080`. Jeden kontener zawiera frontend oraz API i łączy się z istniejącą bazą. Schemat Prisma możesz zaktualizować poleceniem:
+
+```bash
+docker compose -f docker-compose.server.yml run --rm app npx prisma db push --schema apps/api/prisma/schema.prisma
+```
 
 Jeśli obrazy są prywatne, `docker login ghcr.io` musi używać tokenu GitHub z uprawnieniem `read:packages`.
 
