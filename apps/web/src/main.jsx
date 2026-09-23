@@ -24,12 +24,17 @@ const mapStudent = (student) => ({
 });
 const mapCollection = (collection, classStudents = []) => {
   const transactions = collection.transactions || [];
-  const transactionIncome = transactions.filter((transaction) => transaction.type === 'PRZYCHOD');
-  const transactionExpenses = transactions.filter((transaction) => transaction.type === 'WYDATEK');
-  const collected = collection.contributions.reduce((total, contribution) => total + Number(contribution.amount), 0) + transactionIncome.reduce((total, transaction) => total + Number(transaction.amount), 0);
+  const hasStudent = (transaction) => Boolean(String(transaction.studentId || '').trim());
+  const studentTransactions = transactions.filter(hasStudent);
+  const unassignedTransactions = transactions.filter((transaction) => !hasStudent(transaction));
+  const contributionTotal = collection.contributions.reduce((total, contribution) => total + Number(contribution.amount), 0);
+  const transactionIncomeTotal = transactions.filter((transaction) => transaction.type === 'PRZYCHOD').reduce((total, transaction) => total + Number(transaction.amount), 0);
+  const transactionExpenseTotal = transactions.filter((transaction) => transaction.type === 'WYDATEK').reduce((total, transaction) => total + Number(transaction.amount), 0);
+  const transactionIncome = studentTransactions.filter((transaction) => transaction.type === 'PRZYCHOD');
+  const collected = contributionTotal + studentTransactions.reduce((total, transaction) => total + Number(transaction.amount), 0);
   const paidByStudent = new Map();
   collection.contributions.forEach((contribution) => paidByStudent.set(contribution.studentId, (paidByStudent.get(contribution.studentId) || 0) + Number(contribution.amount)));
-  transactionIncome.forEach((transaction) => { if (transaction.studentId) paidByStudent.set(transaction.studentId, (paidByStudent.get(transaction.studentId) || 0) + Number(transaction.amount)); });
+  transactionIncome.forEach((transaction) => { const studentId = String(transaction.studentId || '').trim(); if (studentId) paidByStudent.set(studentId, (paidByStudent.get(studentId) || 0) + Number(transaction.amount)); });
   const studentStatuses = collection.students.map((student) => ({
     id: student.id,
     name: `${student.firstName} ${student.lastName}`,
@@ -42,9 +47,10 @@ const mapCollection = (collection, classStudents = []) => {
     type: collection.schoolYear || 'Zbiórka',
     dates: `${new Date(collection.startsAt).toLocaleDateString('pl-PL')}${collection.endsAt ? ` – ${new Date(collection.endsAt).toLocaleDateString('pl-PL')}` : ''}`,
     collected,
+    balance: contributionTotal + transactionIncomeTotal - Number(collection.spent) - transactionExpenseTotal,
     target,
     targetTotal: target * collection.students.length,
-    spent: Number(collection.spent) + transactionExpenses.reduce((total, transaction) => total + Number(transaction.amount), 0),
+    spent: unassignedTransactions.reduce((total, transaction) => total + (transaction.type === 'PRZYCHOD' ? Number(transaction.amount) : -Number(transaction.amount)), 0),
     students: collection.students.length,
     classStudents: classStudents.length || collection.classStudents || 0,
     paid: studentStatuses.filter((student) => student.paid > 0).length,
@@ -85,7 +91,7 @@ function App() {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [pendingStatus, setPendingStatus] = useState(null);
   const totalCollected = collectionRows.reduce((sum, item) => sum + item.collected, 0);
-  const totalSpent = collectionRows.reduce((sum, item) => sum + item.spent, 0);
+  const totalBalance = collectionRows.reduce((sum, item) => sum + item.balance, 0);
   const totalTarget = collectionRows.reduce((sum, item) => sum + item.targetTotal, 0);
   const collectionProgress = totalTarget ? Math.round((totalCollected / totalTarget) * 100) : 0;
   const activeCollections = collectionRows.filter((item) => !item.endsAt || new Date(item.endsAt) >= new Date()).length;
@@ -529,7 +535,7 @@ function App() {
                     </div>
                   </section>
                   <section className='summary-grid'>
-                    <SummaryCard label='Saldo klasy' value={money(totalCollected - totalSpent)} detail='API' note='aktualne dane' icon={<WalletCards size={21} />} tone='blue' />
+                    <SummaryCard label='Saldo klasy' value={money(totalBalance)} detail='API' note='aktualne dane' icon={<WalletCards size={21} />} tone='blue' />
                     <SummaryCard label='Zebrano w tym roku' value={money(totalCollected)} detail={`${collectionProgress}%`} note={`z planowanych ${money(totalTarget)}`} icon={<Sparkles size={21} />} tone='yellow' progress={collectionProgress} />
                     <SummaryCard label='Aktywne zbiórki' value={String(activeCollections)} detail={String(collectionRows.length)} note='wszystkich zbiórek' icon={<WalletCards size={21} />} tone='green' />
                   </section>
