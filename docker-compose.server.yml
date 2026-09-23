@@ -3,11 +3,11 @@ services:
     image: ghcr.io/dominikszewczyk/skarbona:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_HOST: ${DB_HOST}
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_HOST: ${DB_HOST:?DB_HOST is required}
       DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME}
+      DB_NAME: ${DB_NAME:?DB_NAME is required}
       DB_SCHEMA: ${DB_SCHEMA:-skarbona}
       API_PORT: 3000
     healthcheck:

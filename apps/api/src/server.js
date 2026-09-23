@@ -8,11 +8,11 @@ import { PrismaClient } from '@prisma/client';
 
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../.env') });
 
-const databaseHost = process.env.DB_HOST || 'localhost';
+const databaseHost = String(process.env.DB_HOST || 'localhost').trim();
+if (!databaseHost) throw new Error('DB_HOST is required. Set it to the PostgreSQL container name or host address.');
 const databaseHostWithPort = databaseHost.includes(':') ? databaseHost : `${databaseHost}:${process.env.DB_PORT || '5432'}`;
 const configuredDatabaseUrl = `postgresql://${process.env.DB_USER || 'skarbona'}:${process.env.DB_PASSWORD || 'skarbona'}@${databaseHostWithPort}/${process.env.DB_NAME || 'skarbona'}?schema=${process.env.DB_SCHEMA || 'skarbona'}`;
-if (process.env.DB_USER || process.env.DB_PASSWORD || process.env.DB_HOST || process.env.DB_NAME || process.env.DB_SCHEMA) process.env.DATABASE_URL = configuredDatabaseUrl;
-else process.env.DATABASE_URL ||= configuredDatabaseUrl;
+process.env.DATABASE_URL = configuredDatabaseUrl;
 
 const app = express();
 const prisma = new PrismaClient();
