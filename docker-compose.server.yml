@@ -16,5 +16,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    networks:
+      - database
     ports:
       - "8080:80"
+
+networks:
+  database:
+    external: true
+    name: ${DB_NETWORK:-database_network}

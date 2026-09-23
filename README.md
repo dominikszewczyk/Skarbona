@@ -46,13 +46,14 @@ GHCR_NAMESPACE=github-user
 IMAGE_TAG=latest
 DB_USER=skarbona
 DB_PASSWORD=strong-server-password
-DB_HOST=192.168.0.33
+DB_HOST=postgres
 DB_PORT=5432
 DB_NAME=skarbona
 DB_SCHEMA=skarbona
+DB_NETWORK=database_network
 ```
 
-`docker-compose.yml` przekazuje te zmienne do PostgreSQL i buduje z nich `DATABASE_URL` dla aplikacji. Prisma nadal korzysta wyłącznie z `DATABASE_URL`, ale nie trzeba jej ręcznie wpisywać. Dla istniejącej bazy użyj `docker-compose.server.yml` i ustaw `DB_HOST` na jej adres, np. `192.168.0.33`. Plik `.env` na serwerze pozostaje lokalny i nie powinien być commitowany.
+Przy osobnym kontenerze PostgreSQL oba kontenery muszą być w tej samej sieci Docker. `DB_HOST` to nazwa kontenera/usługi PostgreSQL w tej sieci, np. `postgres`, a `DB_NETWORK` to nazwa tej sieci. Nie używaj `localhost`, bo wewnątrz kontenera oznacza on kontener aplikacji. Plik `.env` na serwerze pozostaje lokalny i nie powinien być commitowany.
 
 Następnie uruchom:
 

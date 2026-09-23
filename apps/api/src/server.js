@@ -21,7 +21,14 @@ const port = process.env.API_PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'skarbona-api' }));
+app.get('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ ok: true, service: 'skarbona-api', database: 'connected' });
+  } catch (error) {
+    res.status(503).json({ ok: false, service: 'skarbona-api', database: 'unavailable', error: error.message });
+  }
+});
 
 app.post('/api/auth/register', async (req, res) => {
   const { login, email, password, name, surname } = req.body;
