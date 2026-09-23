@@ -45,9 +45,10 @@ IMAGE_TAG=latest
 POSTGRES_USER=skarbona
 POSTGRES_PASSWORD=strong-server-password
 POSTGRES_DB=skarbona
+DATABASE_URL=postgresql://skarbona:strong-server-password@db:5432/skarbona?schema=skarbon
 ```
 
-`docker-compose.yml` przekazuje `POSTGRES_USER`, `POSTGRES_PASSWORD` i `POSTGRES_DB` do kontenera PostgreSQL oraz buduje z nich `DATABASE_URL` dla aplikacji, używając hosta `db`. Plik `.env` na serwerze pozostaje lokalny i nie powinien być commitowany.
+`docker-compose.yml` przekazuje `POSTGRES_USER`, `POSTGRES_PASSWORD` i `POSTGRES_DB` do kontenera PostgreSQL oraz przekazuje istniejącą `DATABASE_URL` do aplikacji. Jeśli `DATABASE_URL` nie jest ustawiona, compose zbuduje ją automatycznie. W konfiguracji Docker hostem bazy musi być `db`, a nie `localhost`. Plik `.env` na serwerze pozostaje lokalny i nie powinien być commitowany.
 
 Następnie uruchom:
 
