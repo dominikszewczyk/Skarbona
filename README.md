@@ -45,6 +45,7 @@ IMAGE_TAG=latest
 DB_USER=skarbona
 DB_PASSWORD=strong-server-password
 DB_HOST=db
+DB_PORT=5432
 DB_NAME=skarbona
 DB_SCHEMA=skarbona
 ```

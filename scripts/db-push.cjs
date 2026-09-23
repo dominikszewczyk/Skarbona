@@ -4,7 +4,11 @@ const dotenv = require('dotenv');
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-process.env.DATABASE_URL ||= `postgresql://${process.env.DB_USER || 'skarbona'}:${process.env.DB_PASSWORD || 'skarbona'}@${process.env.DB_HOST || 'localhost'}:5432/${process.env.DB_NAME || 'skarbona'}?schema=${process.env.DB_SCHEMA || 'skarbona'}`;
+const databaseHost = process.env.DB_HOST || 'localhost';
+const databaseHostWithPort = databaseHost.includes(':') ? databaseHost : `${databaseHost}:${process.env.DB_PORT || '5432'}`;
+const configuredDatabaseUrl = `postgresql://${process.env.DB_USER || 'skarbona'}:${process.env.DB_PASSWORD || 'skarbona'}@${databaseHostWithPort}/${process.env.DB_NAME || 'skarbona'}?schema=${process.env.DB_SCHEMA || 'skarbona'}`;
+if (process.env.DB_USER || process.env.DB_PASSWORD || process.env.DB_HOST || process.env.DB_NAME || process.env.DB_SCHEMA) process.env.DATABASE_URL = configuredDatabaseUrl;
+else process.env.DATABASE_URL ||= configuredDatabaseUrl;
 
 const result = spawnSync('npm', ['run', 'db:push', '--workspace', '@skarbona/api'], {
   stdio: 'inherit',
