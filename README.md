@@ -42,7 +42,12 @@ Na serwerze ustaw w `.env`:
 ```dotenv
 GHCR_NAMESPACE=github-user
 IMAGE_TAG=latest
+POSTGRES_USER=skarbona
+POSTGRES_PASSWORD=strong-server-password
+POSTGRES_DB=skarbona
 ```
+
+`docker-compose.yml` przekazuje `POSTGRES_USER`, `POSTGRES_PASSWORD` i `POSTGRES_DB` do kontenera PostgreSQL oraz buduje z nich `DATABASE_URL` dla aplikacji, używając hosta `db`. Plik `.env` na serwerze pozostaje lokalny i nie powinien być commitowany.
 
 Następnie uruchom:
 
