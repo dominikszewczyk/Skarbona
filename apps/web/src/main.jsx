@@ -5,6 +5,7 @@ import './styles.css';
 import CollectionRow from './components/CollectionRow';
 import CollectionsPage from './components/CollectionsPage';
 import CollectionStudentPicker from './components/CollectionStudentPicker';
+import ClassSpacesPage from './components/ClassSpacesPage';
 import RoleField from './components/RoleField';
 import StudentsPage from './components/StudentsPage';
 import SummaryCard from './components/SummaryCard';
@@ -12,7 +13,7 @@ import Sidebar from './components/Sidebar';
 import TransactionsPage from './components/TransactionsPage';
 
 const initialStudents = [];
-const routeToNav = (pathname) => (pathname.startsWith('/collections') ? 'Zbiórki' : pathname.startsWith('/students') ? 'Uczniowie' : pathname.startsWith('/transactions') ? 'Transakcje' : 'Przegląd');
+const routeToNav = (pathname) => (pathname.startsWith('/collections') ? 'Zbiórki' : pathname.startsWith('/students') ? 'Uczniowie' : pathname.startsWith('/transactions') ? 'Transakcje' : pathname.startsWith('/overview') ? 'Przegląd' : 'Moja przestrzeń');
 const money = (value) => `${value.toLocaleString('pl-PL')} zł`;
 const configuredApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const API_URL = configuredApiUrl === '/' ? '' : /^https?:\/\//.test(configuredApiUrl) ? configuredApiUrl.replace(/\/+$/, '') : 'http://localhost:3000';
@@ -72,6 +73,7 @@ function App() {
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
   const [hasClass, setHasClass] = useState(false);
+  const [workspaceClasses, setWorkspaceClasses] = useState([]);
   const [studentRows, setStudentRows] = useState(initialStudents);
   const [collectionRows, setCollectionRows] = useState([]);
   const [classId, setClassId] = useState(null);
@@ -97,14 +99,25 @@ function App() {
   const activeCollections = collectionRows.filter((item) => !item.endsAt || new Date(item.endsAt) >= new Date()).length;
   const activeCollectionRows = collectionRows.filter((item) => !item.endsAt || new Date(item.endsAt) >= new Date());
   const navigate = (path) => {
-    window.history.pushState({}, '', path);
-    setActiveNav(routeToNav(path));
-    setSelectedRouteStudent(new URL(path, window.location.origin).searchParams.get('student'));
+    const targetUrl = new URL(path, window.location.origin);
+    if (path !== '/' && classId && !targetUrl.searchParams.has('class')) targetUrl.searchParams.set('class', classId);
+    const targetPath = `${targetUrl.pathname}${targetUrl.search}`;
+    window.history.pushState({}, '', targetPath);
+    setActiveNav(routeToNav(targetUrl.pathname));
+    setSelectedRouteStudent(targetUrl.searchParams.get('student'));
     setMobileOpen(false);
+  };
+  const selectClass = (selectedClass) => {
+    setClassId(selectedClass.id);
+    setClassData(selectedClass);
+    setStudentRows((selectedClass.students || []).map(mapStudent));
+    setCollectionRows((selectedClass.collections || []).map((collection) => mapCollection(collection, selectedClass.students || [])));
+    setHasClass(true);
+    navigate(`/overview?class=${encodeURIComponent(selectedClass.id)}`);
   };
   const reloadClassData = () => fetch(`${API_URL}/api/users/by-login/dominik/classes`).then((response) => response.json()).then((classes) => {
     if (!classes.length) return;
-    const currentClass = classes[0];
+    const currentClass = classes.find((item) => item.id === classId) || classes[0];
     setClassData(currentClass);
     setStudentRows(currentClass.students.map(mapStudent));
     setCollectionRows(currentClass.collections.map((collection) => mapCollection(collection, currentClass.students)));
@@ -145,12 +158,13 @@ function App() {
     }
     try {
       if (modal === 'class') {
+        const isEditingClass = editingClass;
         const ownerResponse = await fetch(`${API_URL}/api/users/by-login/dominik`);
         if (!ownerResponse.ok) throw new Error('Nie udało się odnaleźć użytkownika Dominik.');
         const owner = await ownerResponse.json();
-        const endpoint = editingClass ? `${API_URL}/api/classes/${classId}` : `${API_URL}/api/classes`;
+        const endpoint = isEditingClass ? `${API_URL}/api/classes/${classId}` : `${API_URL}/api/classes`;
         const response = await fetch(endpoint, {
-          method: editingClass ? 'PUT' : 'POST',
+          method: isEditingClass ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ownerId: owner.id,
@@ -166,10 +180,18 @@ function App() {
         const savedClass = await response.json();
         setClassId(savedClass.id);
         setClassData(savedClass);
+        setWorkspaceClasses((classes) => classes.some((item) => item.id === savedClass.id)
+          ? classes.map((item) => item.id === savedClass.id ? { ...item, ...savedClass } : item)
+          : [...classes, { ...savedClass, students: [], collections: [] }]);
+        if (!isEditingClass) {
+          setStudentRows([]);
+          setCollectionRows([]);
+        }
         setHasClass(true);
         setModal(null);
         setEditingClass(false);
-        setToast(editingClass ? 'Klasa została zaktualizowana.' : 'Klasa została utworzona.');
+        if (!isEditingClass) navigate(`/overview?class=${encodeURIComponent(savedClass.id)}`);
+        setToast(isEditingClass ? 'Klasa została zaktualizowana.' : 'Klasa została utworzona.');
       } else if (modal === 'student' || modal === 'edit-student') {
         const endpoint = modal === 'edit-student' ? `${API_URL}/api/classes/${classId}/students/${selectedStudent.id}` : `${API_URL}/api/classes/${classId}/students`;
         const response = await fetch(endpoint, {
@@ -392,8 +414,15 @@ function App() {
         return response.json();
       })
       .then((classes) => {
+        setWorkspaceClasses(classes);
         if (!classes.length) return;
-        const currentClass = classes[0];
+        setHasClass(true);
+        const requestedClassId = new URLSearchParams(window.location.search).get('class');
+        const currentClass = classes.find((item) => item.id === requestedClassId) || classes[0];
+        if (routeToNav(window.location.pathname) === 'Moja przestrzeń') {
+          setClassData(currentClass);
+          return;
+        }
         setClassId(currentClass.id);
         setClassData(currentClass);
         setStudentRows(currentClass.students.map(mapStudent));
@@ -431,16 +460,15 @@ function App() {
 
   return (
     <div className='app-shell'>
-      <Sidebar activeNav={activeNav} classData={classData} collectionCount={collectionRows.length} hasClass={hasClass} mobileOpen={mobileOpen} onNavigate={navigate} onClose={() => setMobileOpen(false)} />
+      <Sidebar activeNav={activeNav} classData={classData} classes={workspaceClasses} activeClassId={classId || (workspaceClasses.some((item) => item.id === classData.id) ? classData.id : null)} collectionCount={collectionRows.length} hasClass={hasClass} mobileOpen={mobileOpen} onNavigate={navigate} onSelectClass={selectClass} onClose={() => setMobileOpen(false)} />
       <main className='main-content'>
         <header className='topbar'>
           <button className='mobile-menu icon-button' onClick={() => setMobileOpen(true)}>
             <Menu size={21} />
           </button>
           <div className='breadcrumbs'>
-            <span>Moja przestrzeń</span>
-            <ChevronRight size={15} />
-            <strong>{activeNav}</strong>
+            <a className="home-link" href="/" onClick={(event) => { event.preventDefault(); navigate('/'); }}>Moja przestrzeń</a>
+            {activeNav !== 'Moja przestrzeń' && <><ChevronRight size={15} /><strong>{activeNav}</strong></>}
           </div>
           <div className='top-actions'>
             <button className='help-link'>
@@ -454,7 +482,9 @@ function App() {
           </div>
         </header>
         <div className='page-wrap'>
-          {!hasClass ? (
+          {activeNav === 'Moja przestrzeń' ? (
+            <ClassSpacesPage classes={workspaceClasses} onSelect={selectClass} onCreate={() => { setEditingClass(false); setModal('class'); }} onHome={() => navigate('/')} />
+          ) : !hasClass ? (
             <section className='empty-class-state'>
               <div className='empty-class-icon'>
                 <Sparkles size={28} />
@@ -546,7 +576,7 @@ function App() {
                           <h2>Ostatnie zbiórki</h2>
                           <p>Monitoruj wpłaty i wydatki swojej klasy.</p>
                         </div>
-                        <button className='text-button' onClick={() => setActiveNav('Zbiórki')}>
+                        <button className='text-button' onClick={() => navigate('/collections')}>
                           Zobacz wszystkie <ChevronRight size={16} />
                         </button>
                       </div>

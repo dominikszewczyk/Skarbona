@@ -50,8 +50,8 @@ app.get('/api/users/by-login/:login/classes', async (req, res) => {
   const user = await prisma.user.findUnique({ where: { login: req.params.login } });
   if (!user) return res.status(404).json({ error: 'Nie znaleziono użytkownika.' });
   const classes = await prisma.class.findMany({
-    where: { ownerId: user.id },
-    include: { teacherUser: true, chairperson: true, deputy: true, students: true, collections: { include: { contributions: true, students: true, transactions: { orderBy: { transactionDate: 'desc' } } }, orderBy: { startsAt: 'desc' } } },
+    where: { OR: [{ ownerId: user.id }, { members: { some: { userId: user.id } } }] },
+    include: { teacherUser: true, chairperson: true, deputy: true, members: { where: { userId: user.id }, select: { role: true } }, students: true, collections: { include: { contributions: true, students: true, transactions: { orderBy: { transactionDate: 'desc' } } }, orderBy: { startsAt: 'desc' } } },
     orderBy: { createdAt: 'asc' },
   });
   res.json(classes);
