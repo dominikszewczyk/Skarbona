@@ -64,10 +64,39 @@ model Class {
   chairperson    User?        @relation("ClassChairperson", fields: [chairpersonId], references: [id], onDelete: SetNull)
   deputy         User?        @relation("ClassDeputy", fields: [deputyId], references: [id], onDelete: SetNull)
   members        ClassMembership[]
+  yearVersions   ClassYear[]
   students       Student[]
   collections    Collection[]
   transactions   Transaction[]
   createdAt      DateTime     @default(now())
+}
+
+model ClassYear {
+  id               String             @id @default(cuid())
+  classId          String
+  schoolYear       String
+  name             String
+  description      String?
+  teacher          String
+  chairpersonName  String?
+  deputyName       String?
+  class            Class              @relation(fields: [classId], references: [id], onDelete: Cascade)
+  students         ClassYearStudent[]
+  createdAt        DateTime           @default(now())
+
+  @@unique([classId, schoolYear])
+  @@index([classId, schoolYear])
+}
+
+model ClassYearStudent {
+  classYearId String
+  studentId   String
+  active      Boolean   @default(true)
+  classYear   ClassYear @relation(fields: [classYearId], references: [id], onDelete: Cascade)
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([classYearId, studentId])
+  @@index([studentId])
 }
 
 model ClassMembership {
@@ -95,6 +124,7 @@ model Student {
   active       Boolean             @default(true)
   classId      String
   class        Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
+  yearMemberships ClassYearStudent[]
   contributions Contribution[]
   collections  Collection[]
   transactions Transaction[]

@@ -54,7 +54,7 @@ const mapCollection = (collection, classStudents = []) => {
     targetTotal: target * collection.students.length,
     spent: unassignedTransactions.reduce((total, transaction) => total + (transaction.type === 'PRZYCHOD' ? Number(transaction.amount) : -Number(transaction.amount)), 0),
     students: collection.students.length,
-    classStudents: classStudents.length || collection.classStudents || 0,
+    classStudents: Array.isArray(classStudents) ? classStudents.filter((student) => student.active).length : collection.classStudents || 0,
     paid: studentStatuses.filter((student) => student.paid > 0).length,
     unpaid: studentStatuses.filter((student) => !student.paid).map((student) => student.name),
     studentStatuses,
@@ -73,6 +73,7 @@ function App() {
   const [expanded, setExpanded] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [modal, setModal] = useState(null);
+  const [advancingYear, setAdvancingYear] = useState(false);
   const [dashboardImportOpen, setDashboardImportOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [hasClass, setHasClass] = useState(false);
@@ -119,6 +120,7 @@ function App() {
   const navigate = (path) => {
     const targetUrl = new URL(path, window.location.origin);
     if (path !== '/' && classId && !targetUrl.searchParams.has('class')) targetUrl.searchParams.set('class', classId);
+    if (path !== '/' && classId && !targetUrl.searchParams.has('year') && classData.schoolYear) targetUrl.searchParams.set('year', classData.schoolYear);
     const targetPath = `${targetUrl.pathname}${targetUrl.search}`;
     window.history.pushState({}, '', targetPath);
     setActiveNav(routeToNav(targetUrl.pathname));
@@ -131,14 +133,29 @@ function App() {
     setStudentRows((selectedClass.students || []).map(mapStudent));
     setCollectionRows((selectedClass.collections || []).map((collection) => mapCollection(collection, selectedClass.students || [])));
     setHasClass(true);
-    navigate(`/overview?class=${encodeURIComponent(selectedClass.id)}`);
+    navigate(`/overview?class=${encodeURIComponent(selectedClass.id)}&year=${encodeURIComponent(selectedClass.schoolYear)}`);
   };
-  const reloadClassData = () => fetch(`${API_URL}/api/users/by-login/dominik/classes`).then((response) => response.json()).then((classes) => {
+  const changeClassYear = (schoolYear) => fetch(`${API_URL}/api/classes/${classId}/years/${encodeURIComponent(schoolYear)}`)
+    .then((response) => {
+      if (!response.ok) throw new Error('Nie udało się pobrać danych rocznika.');
+      return response.json();
+    })
+    .then((version) => {
+      setClassData(version);
+      setStudentRows(version.students.map(mapStudent));
+      setCollectionRows(version.collections.map((collection) => mapCollection(collection, version.students)));
+      navigate(`${window.location.pathname}?year=${encodeURIComponent(schoolYear)}`);
+    })
+    .catch((error) => setToast(error.message));
+  const reloadClassData = () => fetch(`${API_URL}/api/users/by-login/dominik/classes`).then((response) => response.json()).then(async (classes) => {
     if (!classes.length) return;
     const currentClass = classes.find((item) => item.id === classId) || classes[0];
-    setClassData(currentClass);
-    setStudentRows(currentClass.students.map(mapStudent));
-    setCollectionRows(currentClass.collections.map((collection) => mapCollection(collection, currentClass.students)));
+    const response = await fetch(`${API_URL}/api/classes/${currentClass.id}/years/${encodeURIComponent(classData.schoolYear)}`);
+    const selectedVersion = response.ok ? await response.json() : currentClass;
+    setWorkspaceClasses(classes);
+    setClassData(selectedVersion);
+    setStudentRows(selectedVersion.students.map(mapStudent));
+    setCollectionRows(selectedVersion.collections.map((collection) => mapCollection(collection, selectedVersion.students)));
   }).catch(() => {});
 
   const submit = async (event) => {
@@ -168,7 +185,8 @@ function App() {
             parent1Mail: formValues.parent1Mail || valueOf('parent1Mail', 6),
             parent2Mail: formValues.parent2Mail || valueOf('parent2Mail', 7),
             gender: formValues.gender || form.querySelector('[name="gender"]')?.value || 'NIE_PODANO',
-            active: modal === 'edit-student' ? statusControl?.value !== 'Nieaktywny' : true
+            active: modal === 'edit-student' ? statusControl?.value !== 'Nieaktywny' : true,
+            schoolYear: classData.schoolYear
           };
     if ((modal === 'student' || modal === 'edit-student') && (!formData.firstName.trim() || !formData.lastName.trim())) {
       setToast('Imię i nazwisko ucznia są wymagane.');
@@ -177,15 +195,20 @@ function App() {
     try {
       if (modal === 'class') {
         const isEditingClass = editingClass;
-        const ownerResponse = await fetch(`${API_URL}/api/users/by-login/dominik`);
-        if (!ownerResponse.ok) throw new Error('Nie udało się odnaleźć użytkownika Dominik.');
-        const owner = await ownerResponse.json();
-        const endpoint = isEditingClass ? `${API_URL}/api/classes/${classId}` : `${API_URL}/api/classes`;
+        const isAdvancingYear = advancingYear;
+        const ownerResponse = !isEditingClass && !isAdvancingYear ? await fetch(`${API_URL}/api/users/by-login/dominik`) : null;
+        if (ownerResponse && !ownerResponse.ok) throw new Error('Nie udało się odnaleźć użytkownika Dominik.');
+        const owner = ownerResponse ? await ownerResponse.json() : null;
+        const endpoint = isAdvancingYear
+          ? `${API_URL}/api/classes/${classId}/years`
+          : isEditingClass
+            ? `${API_URL}/api/classes/${classId}/years/${encodeURIComponent(classData.schoolYear)}`
+            : `${API_URL}/api/classes`;
         const response = await fetch(endpoint, {
           method: isEditingClass ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            ownerId: owner.id,
+            ...(owner ? { ownerId: owner.id } : {}),
             name: formData.className,
             schoolYear: formData.schoolYear,
             description: formData.classDescription,
@@ -194,22 +217,29 @@ function App() {
             deputyName: formData.deputyName
           })
         });
-        if (!response.ok) throw new Error('Nie udało się zapisać klasy.');
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.error || 'Nie udało się zapisać klasy.');
+        }
         const savedClass = await response.json();
         setClassId(savedClass.id);
         setClassData(savedClass);
+        setStudentRows((savedClass.students || []).map(mapStudent));
+        setCollectionRows((savedClass.collections || []).map((collection) => mapCollection(collection, savedClass.students || [])));
         setWorkspaceClasses((classes) => classes.some((item) => item.id === savedClass.id)
           ? classes.map((item) => item.id === savedClass.id ? { ...item, ...savedClass } : item)
           : [...classes, { ...savedClass, students: [], collections: [] }]);
-        if (!isEditingClass) {
+        if (!isEditingClass && !isAdvancingYear) {
           setStudentRows([]);
           setCollectionRows([]);
         }
         setHasClass(true);
         setModal(null);
         setEditingClass(false);
-        if (!isEditingClass) navigate(`/overview?class=${encodeURIComponent(savedClass.id)}`);
-        setToast(isEditingClass ? 'Klasa została zaktualizowana.' : 'Klasa została utworzona.');
+        setAdvancingYear(false);
+        if (isAdvancingYear) navigate(`/students?class=${encodeURIComponent(savedClass.id)}&year=${encodeURIComponent(savedClass.schoolYear)}`);
+        else if (!isEditingClass) navigate(`/overview?class=${encodeURIComponent(savedClass.id)}&year=${encodeURIComponent(savedClass.schoolYear)}`);
+        setToast(isAdvancingYear ? 'Utworzono nowy rocznik klasy.' : isEditingClass ? 'Dane rocznika zostały zaktualizowane.' : 'Klasa została utworzona.');
       } else if (modal === 'student' || modal === 'edit-student') {
         const endpoint = modal === 'edit-student' ? `${API_URL}/api/classes/${classId}/students/${selectedStudent.id}` : `${API_URL}/api/classes/${classId}/students`;
         const response = await fetch(endpoint, {
@@ -233,7 +263,8 @@ function App() {
           startsAt: form.querySelector('[name="startsAt"]')?.value || inputs[1]?.value,
           endsAt: form.querySelector('[name="endsAt"]')?.value || inputs[2]?.value,
           target: form.querySelector('[name="target"]')?.value || inputs[3]?.value,
-          studentIds: selectedStudentIds
+          studentIds: selectedStudentIds,
+          schoolYear: classData.schoolYear
         };
         if (!collectionData.name || !collectionData.startsAt || !collectionData.target) throw new Error('Uzupełnij nazwę, datę rozpoczęcia i kwotę zbiórki.');
         const response = await fetch(isEdit ? `${API_URL}/api/classes/${classId}/collections/${selectedCollection.id}` : `${API_URL}/api/classes/${classId}/collections`, {
@@ -265,7 +296,7 @@ function App() {
       const response = await fetch(`${API_URL}/api/classes/${classId}/students/${pendingStatus.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active: nextActive })
+        body: JSON.stringify({ active: nextActive, schoolYear: classData.schoolYear })
       });
       if (!response.ok) throw new Error('Nie udało się zmienić statusu ucznia.');
       const savedStudent = await response.json();
@@ -327,7 +358,7 @@ function App() {
         yearInput.required = true;
         yearInput.placeholder = 'np. 2025/2026';
         yearInput.pattern = '[0-9]{4}/[0-9]{4}';
-        yearInput.value = classData.schoolYear || '2025/2026';
+        yearInput.value = advancingYear ? '' : classData.schoolYear || '2025/2026';
         yearLabel.appendChild(yearInput);
         const firstLabel = form.querySelector('label');
         if (firstLabel) firstLabel.after(yearLabel);
@@ -375,7 +406,7 @@ function App() {
         }
       }
       if (statusLabel) statusLabel.style.display = isStudentEdit ? 'flex' : 'none';
-      if (submitButton && modal === 'class') submitButton.textContent = editingClass ? 'Zapisz' : 'Utwórz klasę';
+      if (submitButton && modal === 'class') submitButton.textContent = advancingYear ? 'Utwórz rocznik' : editingClass ? 'Zapisz' : 'Utwórz klasę';
       if (submitButton && modal === 'collection') submitButton.textContent = editingCollection ? 'Zapisz zmiany' : 'Utwórz zbiórkę';
       if (submitButton && modal === 'student') submitButton.textContent = 'Dodaj ucznia';
       if (submitButton && modal === 'edit-student') submitButton.textContent = 'Zapisz';
@@ -407,10 +438,10 @@ function App() {
         });
         if (genderLabel) genderLabel.querySelector('select').value = selectedStudent.gender || 'NIE_PODANO';
       }
-      if (modal === 'class' && editingClass) {
+      if (modal === 'class' && (editingClass || advancingYear)) {
         const values = {
           className: classData.name,
-          schoolYear: classData.schoolYear,
+          schoolYear: advancingYear ? '' : classData.schoolYear,
           teacher: classData.teacher,
           chairpersonName: classData.chairpersonName,
           deputyName: classData.deputyName
@@ -423,7 +454,7 @@ function App() {
         if (description) description.value = classData.description || '';
       }
     });
-  }, [modal, selectedStudent, selectedCollection, collectionStudentIds, collectionSelectionMode, editingCollection, studentRows, classData]);
+  }, [modal, selectedStudent, selectedCollection, collectionStudentIds, collectionSelectionMode, editingCollection, studentRows, classData, advancingYear]);
 
   useEffect(() => {
     fetch(`${API_URL}/api/users/by-login/dominik/classes`)
@@ -431,20 +462,25 @@ function App() {
         if (!response.ok) throw new Error('Nie udało się pobrać klas.');
         return response.json();
       })
-      .then((classes) => {
+      .then(async (classes) => {
         setWorkspaceClasses(classes);
         if (!classes.length) return;
         setHasClass(true);
         const requestedClassId = new URLSearchParams(window.location.search).get('class');
+        const requestedSchoolYear = new URLSearchParams(window.location.search).get('year');
         const currentClass = classes.find((item) => item.id === requestedClassId) || classes[0];
         if (routeToNav(window.location.pathname) === 'Moja przestrzeń') {
           setClassData(currentClass);
           return;
         }
+        const yearResponse = requestedSchoolYear && requestedSchoolYear !== currentClass.schoolYear
+          ? await fetch(`${API_URL}/api/classes/${currentClass.id}/years/${encodeURIComponent(requestedSchoolYear)}`)
+          : null;
+        const selectedClassYear = yearResponse?.ok ? await yearResponse.json() : currentClass;
         setClassId(currentClass.id);
-        setClassData(currentClass);
-        setStudentRows(currentClass.students.map(mapStudent));
-        setCollectionRows(currentClass.collections.map((collection) => mapCollection(collection, currentClass.students)));
+        setClassData(selectedClassYear);
+        setStudentRows(selectedClassYear.students.map(mapStudent));
+        setCollectionRows(selectedClassYear.collections.map((collection) => mapCollection(collection, selectedClassYear.students)));
         setHasClass(true);
       })
       .catch(() => {});
@@ -490,7 +526,7 @@ function App() {
         </header>
         <div className='page-wrap'>
           {activeNav === 'Moja przestrzeń' ? (
-            <ClassSpacesPage classes={workspaceClasses} onSelect={selectClass} onCreate={() => { setEditingClass(false); setModal('class'); }} onHome={() => navigate('/')} />
+            <ClassSpacesPage classes={workspaceClasses} onSelect={selectClass} onCreate={() => { setEditingClass(false); setAdvancingYear(false); setModal('class'); }} onHome={() => navigate('/')} />
           ) : !hasClass ? (
             <section className='empty-class-state'>
               <div className='empty-class-icon'>
@@ -503,6 +539,7 @@ function App() {
                 className='button primary'
                 onClick={() => {
                   setEditingClass(false);
+                  setAdvancingYear(false);
                   setModal('class');
                 }}
               >
@@ -513,7 +550,7 @@ function App() {
             <>
               {activeNav === 'Uczniowie' ? (
                 <StudentsPage
-                  classData={classData}
+                  classData={{ ...classData, onChangeYear: changeClassYear }}
                   students={studentRows}
                   selectedStudentId={selectedRouteStudent}
                   onToggle={(student) => setPendingStatus(student)}
@@ -523,6 +560,12 @@ function App() {
                   }}
                   onEditClass={() => {
                     setEditingClass(true);
+                    setAdvancingYear(false);
+                    setModal('class');
+                  }}
+                  onAdvanceYear={() => {
+                    setEditingClass(false);
+                    setAdvancingYear(true);
                     setModal('class');
                   }}
                   onAdd={() => {
@@ -532,7 +575,7 @@ function App() {
                 />
               ) : activeNav === 'Zbiórki' ? (
                 <CollectionsPage
-                  classData={{ ...classData, students: studentRows }}
+                  classData={{ ...classData, students: studentRows, onChangeYear: changeClassYear }}
                   collections={collectionRows.map((item) => ({
                     ...item,
                     expanded: expanded === item.id,
@@ -640,8 +683,8 @@ function App() {
           <form className='modal' onSubmit={submit} onClick={(event) => event.stopPropagation()}>
             <div className='modal-heading'>
               <div>
-                <p className='eyebrow'>{modal === 'class' ? 'NOWA KLASA' : modal === 'collection' && editingCollection ? 'EDYCJA ZBIÓRKI' : 'NOWY WPIS'}</p>
-                <h2>{modal === 'class' ? 'Utwórz klasę' : modal === 'collection' ? (editingCollection ? 'Edytuj zbiórkę' : 'Utwórz zbiórkę') : 'Dodaj ucznia'}</h2>
+                <p className='eyebrow'>{modal === 'class' ? (advancingYear ? 'AWANS KLASY' : 'NOWA KLASA') : modal === 'collection' && editingCollection ? 'EDYCJA ZBIÓRKI' : 'NOWY WPIS'}</p>
+                <h2>{modal === 'class' ? (advancingYear ? 'Utwórz kolejny rocznik' : 'Utwórz klasę') : modal === 'collection' ? (editingCollection ? 'Edytuj zbiórkę' : 'Utwórz zbiórkę') : 'Dodaj ucznia'}</h2>
               </div>
               <button type='button' className='icon-button' onClick={() => setModal(null)}>
                 <X size={19} />
@@ -738,7 +781,7 @@ function App() {
                 </label>
               </>
             )}
-            <button className='button primary full'>{modal === 'class' ? 'Utwórz klasę' : modal === 'collection' ? (editingCollection ? 'Zapisz zmiany' : 'Utwórz zbiórkę') : 'Dodaj ucznia'}</button>
+            <button className='button primary full'>{modal === 'class' ? (advancingYear ? 'Utwórz rocznik' : editingClass ? 'Zapisz' : 'Utwórz klasę') : modal === 'collection' ? (editingCollection ? 'Zapisz zmiany' : 'Utwórz zbiórkę') : 'Dodaj ucznia'}</button>
           </form>
         </div>
       )}

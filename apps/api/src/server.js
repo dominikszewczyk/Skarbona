@@ -20,6 +20,45 @@ const app = express();
 const prisma = new PrismaClient();
 const port = process.env.API_PORT || 3000;
 
+const classYearInclude = { students: { include: { student: true } } };
+const ensureClassYear = async (classData, schoolYear = classData.schoolYear) => {
+  let classYear = await prisma.classYear.findUnique({ where: { classId_schoolYear: { classId: classData.id, schoolYear } }, include: classYearInclude });
+  if (classYear) return classYear;
+  try {
+    classYear = await prisma.classYear.create({
+      data: {
+        classId: classData.id,
+        schoolYear,
+        name: classData.name,
+        description: classData.description,
+        teacher: classData.teacher,
+        chairpersonName: classData.chairpersonName,
+        deputyName: classData.deputyName,
+        students: { create: (classData.students || []).map((student) => ({ studentId: student.id, active: student.active })) }
+      },
+      include: classYearInclude
+    });
+    return classYear;
+  } catch (error) {
+    if (error.code !== 'P2002') throw error;
+    return prisma.classYear.findUnique({ where: { classId_schoolYear: { classId: classData.id, schoolYear } }, include: classYearInclude });
+  }
+};
+const classYearStudents = (classYear) => classYear.students.map(({ student, active }) => ({ ...student, active }));
+const classYearSummary = (classData, classYear, collections = []) => ({
+  ...classData,
+  id: classData.id,
+  name: classYear.name,
+  schoolYear: classYear.schoolYear,
+  description: classYear.description,
+  teacher: classYear.teacher,
+  chairpersonName: classYear.chairpersonName,
+  deputyName: classYear.deputyName,
+  students: classYearStudents(classYear),
+  collections,
+  yearVersions: undefined
+});
+
 app.use(cors());
 app.use(express.json());
 
@@ -54,7 +93,70 @@ app.get('/api/users/by-login/:login/classes', async (req, res) => {
     include: { teacherUser: true, chairperson: true, deputy: true, members: { where: { userId: user.id }, select: { role: true } }, students: true, collections: { include: { contributions: true, students: true, transactions: { orderBy: { transactionDate: 'desc' } } }, orderBy: { startsAt: 'desc' } } },
     orderBy: { createdAt: 'asc' },
   });
-  res.json(classes);
+  const versionedClasses = await Promise.all(classes.map(async (classData) => {
+    await ensureClassYear(classData);
+    const yearVersions = await prisma.classYear.findMany({ where: { classId: classData.id }, orderBy: { schoolYear: 'asc' }, select: { id: true, schoolYear: true, name: true } });
+    const latestYear = yearVersions.at(-1);
+    const activeYear = await ensureClassYear(classData, latestYear.schoolYear);
+    return { ...classYearSummary(classData, activeYear, classData.collections), yearVersions };
+  }));
+  res.json(versionedClasses);
+});
+
+app.get('/api/classes/:classId/years/:schoolYear', async (req, res) => {
+  const classData = await prisma.class.findUnique({ where: { id: req.params.classId }, include: { students: true, collections: { where: { schoolYear: req.params.schoolYear }, include: { contributions: true, students: true, transactions: { orderBy: { transactionDate: 'desc' } } }, orderBy: { startsAt: 'desc' } } } });
+  if (!classData) return res.status(404).json({ error: 'Nie znaleziono klasy.' });
+  const classYear = await prisma.classYear.findUnique({ where: { classId_schoolYear: { classId: classData.id, schoolYear: req.params.schoolYear } }, include: classYearInclude });
+  if (!classYear) return res.status(404).json({ error: 'Nie znaleziono wersji klasy dla tego rocznika.' });
+  const yearVersions = await prisma.classYear.findMany({ where: { classId: classData.id }, orderBy: { schoolYear: 'asc' }, select: { id: true, schoolYear: true, name: true } });
+  res.json({ ...classYearSummary(classData, classYear, classData.collections), yearVersions });
+});
+
+app.post('/api/classes/:classId/years', async (req, res) => {
+  const { name, description, teacher, chairpersonName, deputyName } = req.body;
+  const schoolYear = String(req.body.schoolYear || '').trim();
+  const schoolYearParts = schoolYear.match(/^(\d{4})\/(\d{4})$/);
+  if (!schoolYearParts || Number(schoolYearParts[2]) !== Number(schoolYearParts[1]) + 1) return res.status(400).json({ error: 'Podaj rocznik w formacie RRRR/RRRR, np. 2026/2027.' });
+  const classData = await prisma.class.findUnique({ where: { id: req.params.classId }, include: { students: true } });
+  if (!classData) return res.status(404).json({ error: 'Nie znaleziono klasy.' });
+  const existing = await prisma.classYear.findUnique({ where: { classId_schoolYear: { classId: classData.id, schoolYear } } });
+  if (existing) return res.status(409).json({ error: 'Ta klasa ma już wersję dla podanego rocznika.' });
+  await ensureClassYear(classData);
+  const allVersions = await prisma.classYear.findMany({ where: { classId: classData.id }, orderBy: { schoolYear: 'desc' }, select: { schoolYear: true } });
+  if (Number(schoolYearParts[1]) <= Number(allVersions[0].schoolYear.slice(0, 4))) return res.status(400).json({ error: 'Nowy rocznik musi być późniejszy niż najnowszy rocznik tej klasy.' });
+  const sourceYear = await ensureClassYear(classData, allVersions[0].schoolYear);
+  const createdYear = await prisma.classYear.create({
+    data: {
+      classId: classData.id,
+      schoolYear,
+      name: name || sourceYear.name,
+      description: description ?? sourceYear.description,
+      teacher: teacher || sourceYear.teacher,
+      chairpersonName: chairpersonName ?? sourceYear.chairpersonName,
+      deputyName: deputyName ?? sourceYear.deputyName,
+      students: { create: sourceYear.students.map(({ studentId, active }) => ({ studentId, active })) }
+    },
+    include: classYearInclude
+  });
+  await prisma.class.update({ where: { id: classData.id }, data: { name: createdYear.name, schoolYear: createdYear.schoolYear, description: createdYear.description, teacher: createdYear.teacher, chairpersonName: createdYear.chairpersonName, deputyName: createdYear.deputyName } });
+  const yearVersions = await prisma.classYear.findMany({ where: { classId: classData.id }, orderBy: { schoolYear: 'asc' }, select: { id: true, schoolYear: true, name: true } });
+  const collections = await prisma.collection.findMany({ where: { classId: classData.id, schoolYear: createdYear.schoolYear }, include: { contributions: true, students: true, transactions: { orderBy: { transactionDate: 'desc' } } }, orderBy: { startsAt: 'desc' } });
+  res.status(201).json({ ...classYearSummary(classData, createdYear, collections), yearVersions });
+});
+
+app.put('/api/classes/:classId/years/:schoolYear', async (req, res) => {
+  const { name, description, teacher, chairpersonName, deputyName } = req.body;
+  const classYear = await prisma.classYear.update({
+    where: { classId_schoolYear: { classId: req.params.classId, schoolYear: req.params.schoolYear } },
+    data: { name, description, teacher, chairpersonName: chairpersonName || null, deputyName: deputyName || null },
+    include: classYearInclude
+  });
+  const classData = await prisma.class.findUnique({ where: { id: req.params.classId }, include: { students: true } });
+  const latestYear = await prisma.classYear.findFirst({ where: { classId: req.params.classId }, orderBy: { schoolYear: 'desc' } });
+  if (latestYear.id === classYear.id) await prisma.class.update({ where: { id: classData.id }, data: { name, schoolYear: classYear.schoolYear, description, teacher, chairpersonName: chairpersonName || null, deputyName: deputyName || null } });
+  const collections = await prisma.collection.findMany({ where: { classId: classData.id, schoolYear: classYear.schoolYear }, include: { contributions: true, students: true, transactions: { orderBy: { transactionDate: 'desc' } } }, orderBy: { startsAt: 'desc' } });
+  const yearVersions = await prisma.classYear.findMany({ where: { classId: classData.id }, orderBy: { schoolYear: 'asc' }, select: { id: true, schoolYear: true, name: true } });
+  res.json({ ...classYearSummary(classData, classYear, collections), yearVersions });
 });
 
 app.get('/api/classes/:classId/summary', async (req, res) => {
@@ -92,12 +194,13 @@ app.post('/api/classes/:classId/transactions/import', async (req, res) => {
 app.post('/api/classes', async (req, res) => {
   const { ownerId, name, schoolYear, description, teacher, teacherId, chairpersonName, chairpersonId, deputyName, deputyId } = req.body;
   if (!ownerId || !name || !teacher) return res.status(400).json({ error: 'Właściciel, nazwa klasy i wychowawca są wymagani.' });
+  const initialSchoolYear = schoolYear || '2025/2026';
   const members = [
     { userId: ownerId, role: 'SKARBNIK' },
     chairpersonId && { userId: chairpersonId, role: 'PRZEWODNICZACY' },
     deputyId && { userId: deputyId, role: 'ZASTEPCA' },
   ].filter(Boolean);
-  const created = await prisma.class.create({ data: { ownerId, name, schoolYear: schoolYear || undefined, description, teacher, teacherId, chairpersonName, chairpersonId, deputyName, deputyId, members: { create: members.map(({ userId, role }) => ({ user: { connect: { id: userId } }, role })) } } });
+  const created = await prisma.class.create({ data: { ownerId, name, schoolYear: initialSchoolYear, description, teacher, teacherId, chairpersonName, chairpersonId, deputyName, deputyId, members: { create: members.map(({ userId, role }) => ({ user: { connect: { id: userId } }, role })) }, yearVersions: { create: { schoolYear: initialSchoolYear, name, description, teacher, chairpersonName, deputyName } } } });
   res.status(201).json(created);
 });
 
@@ -115,29 +218,41 @@ app.post('/api/classes/:classId/members', async (req, res) => {
 });
 
 app.post('/api/classes/:classId/students', async (req, res) => {
-  const { firstName, lastName, parent1, parent2, parent1Phone, parent2Phone, parent1Mail, parent2Mail, gender = 'NIE_PODANO', active = true } = req.body;
+  const { firstName, lastName, parent1, parent2, parent1Phone, parent2Phone, parent1Mail, parent2Mail, gender = 'NIE_PODANO', schoolYear } = req.body;
   if (!firstName || !lastName) return res.status(400).json({ error: 'Imię i nazwisko ucznia są wymagane.' });
-  const student = await prisma.student.create({ data: { firstName, lastName, parent1, parent2, parent1Phone, parent2Phone, parent1Mail, parent2Mail, gender, active, classId: req.params.classId } });
-  res.status(201).json(student);
+  const classData = await prisma.class.findUnique({ where: { id: req.params.classId }, include: { students: true } });
+  if (!classData) return res.status(404).json({ error: 'Nie znaleziono klasy.' });
+  const classYear = await ensureClassYear(classData, schoolYear || classData.schoolYear);
+  const student = await prisma.student.create({ data: { firstName, lastName, parent1, parent2, parent1Phone, parent2Phone, parent1Mail, parent2Mail, gender, active: true, classId: req.params.classId } });
+  await prisma.classYearStudent.create({ data: { classYearId: classYear.id, studentId: student.id, active: true } });
+  res.status(201).json({ ...student, active: true });
 });
 
 app.put('/api/classes/:classId/students/:studentId', async (req, res) => {
-  const { firstName, lastName, parent1, parent2, parent1Phone, parent2Phone, parent1Mail, parent2Mail, gender, active } = req.body;
-  const student = await prisma.student.update({ where: { id: req.params.studentId }, data: { firstName, lastName, parent1, parent2, parent1Phone, parent2Phone, parent1Mail, parent2Mail, gender, active } });
-  res.json(student);
+  const { firstName, lastName, parent1, parent2, parent1Phone, parent2Phone, parent1Mail, parent2Mail, gender, active = true, schoolYear } = req.body;
+  const student = await prisma.student.update({ where: { id: req.params.studentId, classId: req.params.classId }, data: { firstName, lastName, parent1, parent2, parent1Phone, parent2Phone, parent1Mail, parent2Mail, gender } });
+  const classData = await prisma.class.findUnique({ where: { id: req.params.classId }, include: { students: true } });
+  const classYear = await ensureClassYear(classData, schoolYear || classData.schoolYear);
+  await prisma.classYearStudent.upsert({ where: { classYearId_studentId: { classYearId: classYear.id, studentId: student.id } }, update: { active: Boolean(active) }, create: { classYearId: classYear.id, studentId: student.id, active: Boolean(active) } });
+  res.json({ ...student, active: Boolean(active) });
 });
 
 app.patch('/api/classes/:classId/students/:studentId/status', async (req, res) => {
-  const student = await prisma.student.update({ where: { id: req.params.studentId, classId: req.params.classId }, data: { active: Boolean(req.body.active) } });
-  res.json(student);
+  const classData = await prisma.class.findUnique({ where: { id: req.params.classId }, include: { students: true } });
+  if (!classData) return res.status(404).json({ error: 'Nie znaleziono klasy.' });
+  const student = await prisma.student.findUnique({ where: { id: req.params.studentId, classId: req.params.classId } });
+  if (!student) return res.status(404).json({ error: 'Nie znaleziono ucznia.' });
+  const classYear = await ensureClassYear(classData, req.body.schoolYear || classData.schoolYear);
+  await prisma.classYearStudent.upsert({ where: { classYearId_studentId: { classYearId: classYear.id, studentId: student.id } }, update: { active: Boolean(req.body.active) }, create: { classYearId: classYear.id, studentId: student.id, active: Boolean(req.body.active) } });
+  res.json({ ...student, active: Boolean(req.body.active) });
 });
 
 app.post('/api/classes/:classId/collections', async (req, res) => {
-  const { name, startsAt, endsAt, target, studentIds = [] } = req.body;
+  const { name, startsAt, endsAt, target, studentIds = [], schoolYear } = req.body;
   const classData = await prisma.class.findUnique({ where: { id: req.params.classId }, select: { schoolYear: true } });
   if (!classData) return res.status(404).json({ error: 'Nie znaleziono klasy.' });
   if (!name || !startsAt || !target) return res.status(400).json({ error: 'Nazwa, data rozpoczęcia i kwota są wymagane.' });
-  const collectionData = { name, schoolYear: classData.schoolYear, startsAt: new Date(startsAt), endsAt: endsAt ? new Date(endsAt) : null, target, classId: req.params.classId, students: { connect: studentIds.map((id) => ({ id })) } };
+  const collectionData = { name, schoolYear: schoolYear || classData.schoolYear, startsAt: new Date(startsAt), endsAt: endsAt ? new Date(endsAt) : null, target, classId: req.params.classId, students: { connect: studentIds.map((id) => ({ id })) } };
   const collection = await prisma.collection.create({ data: collectionData });
   res.status(201).json(await prisma.collection.findUnique({ where: { id: collection.id }, include: { contributions: true, students: true } }));
 });
