@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowDownToLine, Bell, ChevronRight, CircleHelp, Menu, Pencil, Plus, Power, Search, Settings, Sparkles, Users, WalletCards, X } from 'lucide-react';
+import { ArrowDownToLine, Bell, ChevronRight, CircleHelp, Menu, Pencil, Plus, Power, Search, Sparkles, Upload, Users, WalletCards, X } from 'lucide-react';
 import './styles.css';
 import CollectionRow from './components/CollectionRow';
 import CollectionsPage from './components/CollectionsPage';
@@ -10,6 +10,7 @@ import RoleField from './components/RoleField';
 import StudentsPage from './components/StudentsPage';
 import SummaryCard from './components/SummaryCard';
 import Sidebar from './components/Sidebar';
+import TransactionImportModal from './components/TransactionImportModal';
 import TransactionsPage from './components/TransactionsPage';
 
 const initialStudents = [];
@@ -66,13 +67,16 @@ const mapCollection = (collection, classStudents = []) => {
 };
 
 function App() {
+  const [today, setToday] = useState(() => new Date());
   const [activeNav, setActiveNav] = useState(() => routeToNav(window.location.pathname));
   const [selectedRouteStudent, setSelectedRouteStudent] = useState(() => new URLSearchParams(window.location.search).get('student'));
   const [expanded, setExpanded] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [modal, setModal] = useState(null);
+  const [dashboardImportOpen, setDashboardImportOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [hasClass, setHasClass] = useState(false);
+  const [userName, setUserName] = useState('');
   const [workspaceClasses, setWorkspaceClasses] = useState([]);
   const [studentRows, setStudentRows] = useState(initialStudents);
   const [collectionRows, setCollectionRows] = useState([]);
@@ -92,10 +96,24 @@ function App() {
   const [collectionSelectionMode, setCollectionSelectionMode] = useState('all');
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [pendingStatus, setPendingStatus] = useState(null);
-  const totalCollected = collectionRows.reduce((sum, item) => sum + item.collected, 0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setToday(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    fetch(`${API_URL}/api/users/by-login/dominik`)
+      .then((response) => {
+        if (!response.ok) throw new Error('Nie udało się pobrać użytkownika.');
+        return response.json();
+      })
+      .then((user) => setUserName(user.name || ''))
+      .catch(() => {});
+  }, []);
+  const currentYearCollections = collectionRows.filter((item) => item.schoolYear === classData.schoolYear);
+  const currentYearCollected = currentYearCollections.reduce((sum, item) => sum + item.collected, 0);
+  const currentYearTarget = currentYearCollections.reduce((sum, item) => sum + item.targetTotal, 0);
   const totalBalance = collectionRows.reduce((sum, item) => sum + item.balance, 0);
-  const totalTarget = collectionRows.reduce((sum, item) => sum + item.targetTotal, 0);
-  const collectionProgress = totalTarget ? Math.round((totalCollected / totalTarget) * 100) : 0;
+  const currentYearProgress = currentYearTarget ? Math.round((currentYearCollected / currentYearTarget) * 100) : 0;
   const activeCollections = collectionRows.filter((item) => !item.endsAt || new Date(item.endsAt) >= new Date()).length;
   const activeCollectionRows = collectionRows.filter((item) => !item.endsAt || new Date(item.endsAt) >= new Date());
   const navigate = (path) => {
@@ -432,17 +450,6 @@ function App() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    const settingsButton = document.querySelector('.class-info .icon-button');
-    if (!settingsButton) return undefined;
-    const openEditor = () => {
-      setEditingClass(true);
-      setModal('class');
-    };
-    settingsButton.addEventListener('click', openEditor);
-    return () => settingsButton.removeEventListener('click', openEditor);
-  }, [hasClass, classData]);
-
   const openNewCollection = () => {
     setEditingCollection(false);
     setSelectedCollection(null);
@@ -549,9 +556,9 @@ function App() {
                 <>
                   <section className='page-heading'>
                     <div>
-                      <p className='eyebrow'>PONIEDZIAŁEK, 9 GRUDNIA 2024</p>
+                      <p className='eyebrow'>{new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(today).toLocaleUpperCase('pl-PL')}</p>
                       <h1>
-                        Dzień dobry, Dominiku <span>✦</span>
+                        Dzień dobry, {userName || 'użytkowniku'} <span>✦</span>
                       </h1>
                       <p className='subheading'>{classData.description || `Podsumowanie klasy ${classData.name || ''}.`}</p>
                     </div>
@@ -565,8 +572,8 @@ function App() {
                     </div>
                   </section>
                   <section className='summary-grid'>
-                    <SummaryCard label='Saldo klasy' value={money(totalBalance)} detail='API' note='aktualne dane' icon={<WalletCards size={21} />} tone='blue' />
-                    <SummaryCard label='Zebrano w tym roku' value={money(totalCollected)} detail={`${collectionProgress}%`} note={`z planowanych ${money(totalTarget)}`} icon={<Sparkles size={21} />} tone='yellow' progress={collectionProgress} />
+                    <SummaryCard label='Saldo klasy' value={money(totalBalance)} detail={'Aktualizacja'} note={''} icon={<WalletCards size={21} />} tone='blue' />
+                    <SummaryCard label='Zebrano w tym roku' value={money(currentYearCollected)} detail={`${currentYearProgress}%`} note={`rocznik ${classData.schoolYear || '—'} · plan ${money(currentYearTarget)}`} icon={<Sparkles size={21} />} tone='yellow' progress={currentYearProgress} />
                     <SummaryCard label='Aktywne zbiórki' value={String(activeCollections)} detail={String(collectionRows.length)} note='wszystkich zbiórek' icon={<WalletCards size={21} />} tone='green' />
                   </section>
                   <section className='content-grid'>
@@ -609,50 +616,16 @@ function App() {
                           </span>
                           <ChevronRight size={17} />
                         </button>
-                        <button className='quick-action' onClick={() => setModal('student')}>
+                        <button className='quick-action' onClick={() => setDashboardImportOpen(true)}>
                           <span className='action-icon blue'>
-                            <Users size={19} />
+                            <Upload size={19} />
                           </span>
                           <span>
-                            <strong>Dodaj ucznia</strong>
-                            <small>Uzupełnij listę klasy</small>
+                            <strong>Import CSV</strong>
+                            <small>Dodaj transakcje z pliku bankowego</small>
                           </span>
                           <ChevronRight size={17} />
                         </button>
-                      </div>
-                      <div className='class-info panel'>
-                        <div className='class-info-top'>
-                          <div>
-                            <p className='eyebrow'>TWOJA KLASA</p>
-                            <h2>{classData.name}</h2>
-                          </div>
-                          <button className='icon-button'>
-                            <Settings size={17} />
-                          </button>
-                        </div>
-                        <p>
-                          {classData.description || 'Brak opisu klasy'}
-                          <br />
-                          Wychowawca: <strong>{classData.teacher}</strong>
-                          <br />
-                          Przewodniczący: <strong>{classData.chairperson?.name || classData.chairpersonName || 'Nie przypisano'}</strong>
-                          <br />
-                          Zastępca: <strong>{classData.deputy?.name || classData.deputyName || 'Nie przypisano'}</strong>
-                        </p>
-                        <div className='info-stats'>
-                          <div>
-                            <strong>{studentRows.length}</strong>
-                            <span>uczniów</span>
-                          </div>
-                          <div>
-                            <strong>{classData.chairperson ? '1' : '0'}</strong>
-                            <span>przewodniczący</span>
-                          </div>
-                          <div>
-                            <strong>{classData.name}</strong>
-                            <span>klasa</span>
-                          </div>
-                        </div>
                       </div>
                     </aside>
                   </section>
@@ -790,6 +763,17 @@ function App() {
           </div>
         </div>
       )}
+      {dashboardImportOpen && <TransactionImportModal
+        apiUrl={API_URL}
+        classId={classId}
+        students={studentRows}
+        collections={collectionRows}
+        onClose={() => setDashboardImportOpen(false)}
+        onSaved={() => {
+          setDashboardImportOpen(false);
+          reloadClassData();
+        }}
+      />}
       {toast && <div className='toast'>✓ {toast}</div>}
     </div>
   );
