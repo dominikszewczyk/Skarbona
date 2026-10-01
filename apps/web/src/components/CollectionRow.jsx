@@ -5,10 +5,30 @@ export default function CollectionRow({ item, expanded, onExpand, onEdit, onStud
   const progress = item.targetTotal ? Math.round(item.collected / item.targetTotal * 100) : 0;
   return <div className={`collection-wrap ${expanded ? 'is-expanded' : ''}`}>
     <div className="collection-row" role="button" tabIndex="0" onClick={onExpand} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onExpand(); }}>
-      <span className="collection-title"><span className="collection-icon"><WalletCards size={18} /></span><span><strong>{item.name} ({money(item.target)})</strong><small>{item.type} · {item.dates}</small></span></span>
-      <span className="payment-progress"><span className="progress-label"><b>{money(item.collected)}</b> / {money(item.targetTotal)}<small>{progress}%</small></span><span className="progress"><span style={{ width: `${progress}%` }} /></span></span>
-      <span className="balance"><strong>{money(item.balance)}</strong><small>wydano {money(item.spent)}</small></span>
-      <span className="student-count"><strong>{item.students} <small>/ {item.classStudents}</small></strong><small>uczniów w zbiórce / klasie</small></span>
+      <span className="collection-title">
+        <span className="collection-icon">
+          <WalletCards size={18} />
+        </span>
+        <span>
+          <strong>{item.name} ({money(item.target)})</strong>
+          <small>{item.type} · {item.dates}</small>
+        </span>
+      </span>
+      <span className="payment-progress">
+        <span className="progress-label">
+          <b title="Łącznie zebrano">{money(item.collected)}</b> / <span title="Łączny cel zbiórki">{money(item.targetTotal)}</span><small>{progress}%</small>
+        </span>
+        <span className="progress">
+          <span style={{ width: `${progress}%` }} /></span>
+        </span>
+        <span className="balance">
+          <strong title="Bilans">{money(item.balance)}</strong>
+          <small title="Suma wydatków">wydano {money(item.spent)}</small>
+        </span>
+        <span className="student-count">
+          <strong>{item.students} <small>/ {item.classStudents}</small></strong>
+          <small>uczniów w zbiórce / klasie</small>
+        </span>
       <ChevronDown className={expanded ? 'rotate' : ''} size={18} />
     </div>
     {expanded && <div className="unpaid">
