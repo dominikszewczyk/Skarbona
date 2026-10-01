@@ -45,13 +45,15 @@ Na serwerze ustaw w `.env`:
 GHCR_NAMESPACE=github-user
 IMAGE_TAG=latest
 DB_USER=skarbona
-DB_PASSWORD=strong-server-password
+DB_PASSWORD='strong-server-password'
 DB_HOST=postgres
 DB_PORT=5432
 DB_NAME=skarbona
 DB_SCHEMA=skarbona
 DB_NETWORK=database_network
 ```
+
+Hasło wpisuj jako zwykły tekst, np. `DB_PASSWORD='AgusiaToSuperLaska!@#'`. Nie wpisuj `%21%40%23`; obraz obsługuje stare wartości zakodowane, ale zapis zwykłego hasła jest właściwy. Cudzysłowy chronią znaki specjalne w pliku `.env`.
 
 Przy osobnym kontenerze PostgreSQL oba kontenery muszą być w tej samej sieci Docker. `DB_HOST` to nazwa kontenera/usługi PostgreSQL w tej sieci, np. `postgres`, a `DB_NETWORK` to nazwa tej sieci. Nie używaj `localhost`, bo wewnątrz kontenera oznacza on kontener aplikacji. Plik `.env` na serwerze pozostaje lokalny i nie powinien być commitowany.
 

@@ -11,7 +11,9 @@ dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)),
 const databaseHost = String(process.env.DB_HOST || 'localhost').trim();
 if (!databaseHost) throw new Error('DB_HOST is required. Set it to the PostgreSQL container name or host address.');
 const databaseHostWithPort = databaseHost.includes(':') ? databaseHost : `${databaseHost}:${process.env.DB_PORT || '5432'}`;
-const configuredDatabaseUrl = `postgresql://${process.env.DB_USER || 'skarbona'}:${process.env.DB_PASSWORD || 'skarbona'}@${databaseHostWithPort}/${process.env.DB_NAME || 'skarbona'}?schema=${process.env.DB_SCHEMA || 'skarbona'}`;
+const decodeLegacyValue = (value) => { try { return decodeURIComponent(value); } catch { return value; } };
+const encodeCredential = (value) => encodeURIComponent(decodeLegacyValue(value));
+const configuredDatabaseUrl = `postgresql://${encodeCredential(process.env.DB_USER || 'skarbona')}:${encodeCredential(process.env.DB_PASSWORD || 'skarbona')}@${databaseHostWithPort}/${encodeURIComponent(process.env.DB_NAME || 'skarbona')}?schema=${encodeURIComponent(process.env.DB_SCHEMA || 'skarbona')}`;
 process.env.DATABASE_URL = configuredDatabaseUrl;
 
 const app = express();
